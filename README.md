@@ -8,14 +8,9 @@
 ██   ████ ███████ ██   ██  ██████  ███████
 </pre>
 
+<h2 align="center">Our Socials Us</h2>
 
 <p align="center">
-  <strong>Make sure to Join Our Discord Discord</strong><br>
-  <a href="https://discord.gg/VaaDCphgrg">https://discord.gg/VaaDCphgrg</a>
-</p>
-
-<h2 align="center">More From Us</h2>
-
-<p align="center">
-  <a href="https://youtube.com/yourchannel">YouTube</a>
+  <a href="https://youtube.com/yourchannel">YouTube</a><br>
+  <a href="https://discord.gg/VaaDCphgrg">Discord</a>
 </p>
