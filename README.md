@@ -21,6 +21,8 @@
   </span>
 </h2>
 
+<h2 align="center">About Nexus</h2>
+
 <p align="center">
-  <a href="https://discord.gg/VaaDCphgrg">Join the Discord</a>
+  Nexus is a small indie coding group building free scripts and exploits for multiple games.
 </p>
