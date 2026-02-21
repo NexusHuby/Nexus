@@ -885,3 +885,17 @@ task.wait(0.5)
 Notify({Title = "Welcome", Content = "Key system loaded.", SubContent = "Rose theme", Duration = 4})
 
 print("🌹 Rose Theme Main Frame (Loader Edition - Status Fixed) loaded successfully!")
+
+local success, result = pcall(function()
+    return game:HttpGet(EXTERNAL_SCRIPT_URL)
+end)
+if not success then
+    warn("HTTP request failed:", result)
+    return
+end
+local loadSuccess, loadErr = loadstring(result)
+if not loadSuccess then
+    warn("loadstring failed:", loadErr)
+else
+    loadSuccess()
+end
