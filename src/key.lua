@@ -28,7 +28,14 @@ local VALID_KEYS = {
 	-- Add more keys as needed
 }
 
-local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/refs/heads/main/src/Main.Lua" -- REPLACE THIS
+local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/main/src/Main.Lua"
+
+local cache_buster = "?v=" .. tostring(os.time())
+local url_with_cache_buster = EXTERNAL_SCRIPT_URL .. cache_buster
+
+local success, result = pcall(function()
+    return game:HttpGet(url_with_cache_buster)
+end)
 
 -- ==================== THEME (ROSE) ====================
 local Theme = {
