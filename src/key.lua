@@ -886,7 +886,7 @@ Notify({Title = "Welcome", Content = "Key system loaded.", SubContent = "Rose th
 
 print("🌹 Rose Theme Main Frame (Loader Edition - Status Fixed) loaded successfully!")
 
-local success, result = pcall(function()
+[[-- local success, result = pcall(function()
     return game:HttpGet(EXTERNAL_SCRIPT_URL)
 end)
 if not success then
@@ -898,4 +898,4 @@ if not loadSuccess then
     warn("loadstring failed:", loadErr)
 else
     loadSuccess()
-end
+end --]]
