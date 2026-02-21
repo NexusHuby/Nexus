@@ -1,8 +1,8 @@
 --[[
-	🌹 Rose Theme External Frame (Minimal)
+	🌹 Rose Theme External Frame (Tabs & Resize)
 	Author: DeepSeek
-	Description: A simple window with title bar (close, minimize, Discord) and welcome text.
-	             Loaded after key verification. Same Rose theme and animations as key frame.
+	Description: Loaded after key verification. Features draggable, resizable window,
+	             sidebar tabs, and retains Rose theme. Welcome text is in the first tab.
 ]]
 
 local player = game.Players.LocalPlayer
@@ -27,6 +27,8 @@ local Theme = {
 	AcrylicNoise = 0.92,
 
 	TitleBarLine = Color3.fromRGB(140, 85, 105),
+	Tab = Color3.fromRGB(180, 140, 160),
+	ElementBorder = Color3.fromRGB(110, 70, 85),
 
 	Text = Color3.fromRGB(240, 240, 240),
 	SubText = Color3.fromRGB(170, 170, 170),
@@ -37,6 +39,8 @@ local ASSETS = {
 	Close = "rbxassetid://7072725342",
 	Minimize = "rbxassetid://5769388446",
 	Discord = "rbxassetid://7743864734",
+	Home = "rbxassetid://5769384002",      -- Use key icon for home tab
+	Settings = "rbxassetid://6034509580",   -- Gear icon for settings
 }
 
 -- Helper: rounded frame with optional stroke
@@ -74,7 +78,6 @@ end
 local function copyToClipboard(text)
 	local success = pcall(function() setclipboard(text) end)
 	if not success then
-		-- No notifications in this minimal frame, just print
 		print("Copy manually: " .. text)
 	else
 		print("Copied to clipboard!")
@@ -82,8 +85,8 @@ local function copyToClipboard(text)
 end
 
 -- ==================== MAIN WINDOW ====================
-local windowSize = UDim2.new(0, 650, 0, 450)  -- Smaller, just for text
-local windowPos = UDim2.new(0.5, -200, 0.5, -100)
+local windowSize = UDim2.new(0, 650, 0, 450)
+local windowPos = UDim2.new(0.5, -325, 0.5, -225)
 local bgTransparency = 0.08
 
 local mainFrame = roundedFrame(gui, windowSize, windowPos, Theme.AcrylicMain, Theme.AcrylicBorder, 12, bgTransparency)
@@ -94,6 +97,7 @@ mainFrame.BackgroundTransparency = 1  -- for opening animation
 local originalSize = mainFrame.Size
 local isAnimating = false
 local isClosing = false
+local minimized = false
 
 local gradient = createGradient(Theme.AcrylicGradient, 135)
 gradient.Parent = mainFrame
@@ -117,7 +121,6 @@ local titleBarLine = Instance.new("Frame")
 titleBarLine.Size = UDim2.new(1, 0, 0, 1)
 titleBarLine.Position = UDim2.new(0, 0, 1, 0)
 titleBarLine.BackgroundColor3 = Theme.TitleBarLine
-titleBarLine.BorderSizePixel = 0
 titleBarLine.Parent = titleBar
 
 local leftContainer = Instance.new("Frame")
@@ -185,61 +188,211 @@ local function createTitleBarButton(iconAssetId, posX, callback)
 	return btn
 end
 
--- Close button
 local closeBtn = createTitleBarButton(ASSETS.Close, -4, function()
 	if isClosing then return end
 	isClosing = true
-	local closeTween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {
-		BackgroundTransparency = 1
-	})
+	local closeTween = tweenService:Create(mainFrame, TweenInfo.new(0.3), {BackgroundTransparency = 1})
 	closeTween:Play()
 	closeTween.Completed:Connect(function() gui:Destroy() end)
 end)
 
--- Minimize button
-local minimized = false
 local minBtn = createTitleBarButton(ASSETS.Minimize, -40, function()
 	if isAnimating or isClosing then return end
 	isAnimating = true
 	minimized = not minimized
-	
-	if minimized then
-		local targetSize = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 42)
-		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = targetSize})
-		tween:Play()
-		tween.Completed:Connect(function() isAnimating = false end)
-	else
-		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = originalSize})
-		tween:Play()
-		tween.Completed:Connect(function() isAnimating = false end)
-	end
+	local targetSize = minimized and UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 42) or originalSize
+	local tween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {Size = targetSize})
+	tween:Play()
+	tween.Completed:Connect(function() isAnimating = false end)
 end)
 
--- Discord button
 local discordBtn = createTitleBarButton(ASSETS.Discord, -80, function()
 	copyToClipboard("https://discord.gg/your-invite")
 	print("Discord invite copied!")
 end)
 
--- ==================== CONTENT AREA ====================
-local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -24, 1, -60)
-content.Position = UDim2.new(0, 12, 0, 52)
-content.BackgroundTransparency = 1
-content.Parent = mainFrame
+-- ==================== SIDEBAR & TABS ====================
+local sidebarWidth = 150
+local sidebar = Instance.new("Frame")
+sidebar.Size = UDim2.new(0, sidebarWidth, 1, -60)  -- Below title bar
+sidebar.Position = UDim2.new(0, 0, 0, 42)
+sidebar.BackgroundTransparency = 1
+sidebar.Parent = mainFrame
 
--- Welcome text
-local welcomeLabel = Instance.new("TextLabel")
-welcomeLabel.Size = UDim2.new(1, 0, 1, 0)
-welcomeLabel.BackgroundTransparency = 1
-welcomeLabel.Text = "Welcome, " .. player.Name .. "!\nExternal script loaded successfully."
-welcomeLabel.TextColor3 = Theme.Text
-welcomeLabel.Font = Enum.Font.Gotham
-welcomeLabel.TextSize = 18
-welcomeLabel.TextWrapped = true
-welcomeLabel.Parent = content
+-- Vertical divider line
+local divider = Instance.new("Frame")
+divider.Size = UDim2.new(0, 1, 1, -60)
+divider.Position = UDim2.new(0, sidebarWidth, 0, 42)
+divider.BackgroundColor3 = Theme.ElementBorder
+divider.BorderSizePixel = 0
+divider.Parent = mainFrame
 
--- ==================== DRAGGABLE WINDOW ====================
+-- Tab buttons container
+local tabHolder = Instance.new("ScrollingFrame")
+tabHolder.Size = UDim2.new(1, -10, 1, -10)
+tabHolder.Position = UDim2.new(0, 5, 0, 5)
+tabHolder.BackgroundTransparency = 1
+tabHolder.ScrollBarThickness = 0
+tabHolder.BorderSizePixel = 0
+tabHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabHolder.AutomaticCanvasSize = Enum.AutomaticSize.Y
+tabHolder.Parent = sidebar
+
+local tabList = Instance.new("UIListLayout")
+tabList.Padding = UDim.new(0, 4)
+tabList.SortOrder = Enum.SortOrder.LayoutOrder
+tabList.Parent = tabHolder
+
+-- Content area (right of sidebar)
+local contentArea = Instance.new("Frame")
+contentArea.Size = UDim2.new(1, -sidebarWidth - 2, 1, -60)  -- subtract divider width
+contentArea.Position = UDim2.new(0, sidebarWidth + 2, 0, 42)
+contentArea.BackgroundTransparency = 1
+contentArea.Parent = mainFrame
+
+-- Tabs data
+local tabs = {}
+local currentTab = nil
+
+local function createTab(name, iconAssetId, contentBuilder)
+	local tabButton = Instance.new("TextButton")
+	tabButton.Size = UDim2.new(1, 0, 0, 34)
+	tabButton.BackgroundTransparency = 1
+	tabButton.Parent = tabHolder
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = tabButton
+
+	local icon = Instance.new("ImageLabel")
+	icon.Size = UDim2.new(0, 16, 0, 16)
+	icon.Position = UDim2.new(0, 8, 0.5, -8)
+	icon.BackgroundTransparency = 1
+	icon.Image = iconAssetId
+	icon.ImageColor3 = Theme.Text
+	icon.Parent = tabButton
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -30, 1, 0)
+	label.Position = UDim2.new(0, 30, 0, 0)
+	label.BackgroundTransparency = 1
+	label.Text = name
+	label.TextColor3 = Theme.Text
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 12
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = tabButton
+
+	local hoverTween
+	tabButton.MouseEnter:Connect(function()
+		if hoverTween then hoverTween:Cancel() end
+		hoverTween = tweenService:Create(tabButton, TweenInfo.new(0.15), {BackgroundTransparency = 0.94})
+		hoverTween:Play()
+	end)
+	tabButton.MouseLeave:Connect(function()
+		if hoverTween then hoverTween:Cancel() end
+		hoverTween = tweenService:Create(tabButton, TweenInfo.new(0.15), {BackgroundTransparency = currentTab == tabButton and 0.89 or 1})
+		hoverTween:Play()
+	end)
+	tabButton.MouseButton1Down:Connect(function()
+		tweenService:Create(tabButton, TweenInfo.new(0.1), {BackgroundTransparency = 0.92}):Play()
+	end)
+	tabButton.MouseButton1Up:Connect(function()
+		tweenService:Create(tabButton, TweenInfo.new(0.1), {BackgroundTransparency = currentTab == tabButton and 0.89 or 0.94}):Play()
+	end)
+
+	local contentFrame = Instance.new("Frame")
+	contentFrame.Size = UDim2.new(1, -10, 1, -10)
+	contentFrame.Position = UDim2.new(0, 5, 0, 5)
+	contentFrame.BackgroundTransparency = 1
+	contentFrame.Visible = false
+	contentFrame.Parent = contentArea
+
+	contentBuilder(contentFrame)
+
+	tabButton.MouseButton1Click:Connect(function()
+		if currentTab then
+			currentTab.BackgroundTransparency = 1
+			currentTab.Content.Visible = false
+		end
+		tabButton.BackgroundTransparency = 0.89
+		contentFrame.Visible = true
+		currentTab = tabButton
+		currentTab.Content = contentFrame
+	end)
+
+	return tabButton, contentFrame
+end
+
+-- Content builder for home tab
+local function buildHomeTab(parent)
+	local welcomeLabel = Instance.new("TextLabel")
+	welcomeLabel.Size = UDim2.new(1, 0, 1, 0)
+	welcomeLabel.BackgroundTransparency = 1
+	welcomeLabel.Text = "Welcome, " .. player.Name .. "!\nExternal script loaded successfully."
+	welcomeLabel.TextColor3 = Theme.Text
+	welcomeLabel.Font = Enum.Font.Gotham
+	welcomeLabel.TextSize = 18
+	welcomeLabel.TextWrapped = true
+	welcomeLabel.Parent = parent
+end
+
+-- Content builder for settings tab (placeholder)
+local function buildSettingsTab(parent)
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Text = "Settings – under construction"
+	label.TextColor3 = Theme.SubText
+	label.Font = Enum.Font.Gotham
+	label.TextSize = 16
+	label.TextWrapped = true
+	label.Parent = parent
+end
+
+-- Create tabs
+local homeBtn, homeContent = createTab("Home", ASSETS.Home, buildHomeTab)
+local settingsBtn, settingsContent = createTab("Settings", ASSETS.Settings, buildSettingsTab)
+
+-- Select home tab by default
+homeBtn.MouseButton1Click:Fire()
+
+-- ==================== RESIZE HANDLE ====================
+local resizeHandle = Instance.new("TextButton")
+resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+resizeHandle.BackgroundTransparency = 1
+resizeHandle.Text = ""
+resizeHandle.Parent = mainFrame
+
+-- Resizing logic
+local resizing = false
+local resizeStartPos, resizeStartSize
+
+resizeHandle.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		resizing = true
+		resizeStartPos = input.Position
+		resizeStartSize = mainFrame.Size
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				resizing = false
+			end
+		end)
+	end
+end)
+
+userInputService.InputChanged:Connect(function(input)
+	if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - resizeStartPos
+		local newWidth = math.max(400, resizeStartSize.X.Offset + delta.X)
+		local newHeight = math.max(300, resizeStartSize.Y.Offset + delta.Y)
+		mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+		originalSize = mainFrame.Size  -- update original for minimize
+	end
+end)
+
+-- ==================== DRAGGABLE WINDOW (Title Bar) ====================
 local dragging = false
 local dragStart, startPos, dragInput
 
@@ -277,4 +430,4 @@ local openTween = tweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingS
 })
 openTween:Play()
 
-print("🌹 Rose External Frame loaded.")
+print("🌹 Rose External Frame (Tabs & Resize) loaded.")
