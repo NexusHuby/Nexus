@@ -28,7 +28,7 @@ local VALID_KEYS = {
 	-- Add more keys as needed
 }
 
-local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/actual_script.lua" -- REPLACE THIS
+local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/refs/heads/main/src/Main.Lua" -- REPLACE THIS
 
 -- ==================== THEME (ROSE) ====================
 local Theme = {
