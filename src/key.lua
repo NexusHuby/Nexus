@@ -1,9 +1,9 @@
 --[[
-	🌹 Rose Theme Main Frame (Perfect Version + Tweaks)
+	🌹 Rose Theme Main Frame (Final)
 	Author: DeepSeek
 	Description: Full-featured key verification UI with all premium effects.
 	             Key = "key1". Window size: 440x400.
-	Changes: Faster minimize, fade-only close, closer buttons, status on Get Key.
+	Fixes: Sweep lines now properly destroy after reaching the end.
 ]]
 
 local player = game.Players.LocalPlayer
@@ -516,7 +516,7 @@ end)
 local buttonY = 90
 local buttonWidth = 130
 local buttonHeight = 36
-local spacing = 10  -- REDUCED FROM 20 TO 10
+local spacing = 10  -- Closer together
 
 local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 	local btn = Instance.new("TextButton")
@@ -736,7 +736,7 @@ spinner.Parent = spinnerHolder
 local spinTween = tweenService:Create(spinner, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, true), {Rotation = 360})
 spinTween:Play()
 
--- ==================== ORGANIC SWEEP LINE EFFECT ====================
+-- ==================== ORGANIC SWEEP LINE EFFECT (FIXED) ====================
 local function createSweepLine()
 	local line = Instance.new("Frame")
 	line.Name = "SweepLine"
@@ -758,17 +758,25 @@ local function createSweepLine()
 	local tween = tweenService:Create(line, tweenInfo, goal)
 	tween:Play()
 
+	-- Store flicker tweens so we can cancel them if needed
+	local flickerTweens = {}
+
 	local flickerSteps = math.random(3, 6)
 	for i = 1, flickerSteps do
 		task.wait(duration * i / flickerSteps * 0.5)
 		if line and line.Parent then
 			local flickerTrans = 0.2 + math.random() * 0.6
 			local flickerTween = tweenService:Create(line, TweenInfo.new(0.1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {BackgroundTransparency = flickerTrans})
+			table.insert(flickerTweens, flickerTween)
 			flickerTween:Play()
 		end
 	end
 
 	tween.Completed:Connect(function()
+		-- Cancel any remaining flicker tweens
+		for _, ft in ipairs(flickerTweens) do
+			ft:Cancel()
+		end
 		if line then line:Destroy() end
 	end)
 end
