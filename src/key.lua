@@ -524,6 +524,19 @@ textBox.FocusLost:Connect(function()
 	indicator.Position = UDim2.new(0, 2, 1, -1)
 end)
 
+-- ==================== STATUS LABEL ====================
+-- Moved BEFORE button click handlers so they can access it
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, 0, 0, 24)
+status.Position = UDim2.new(0, 0, 0, 135) -- Will be recalculated after buttons are placed, but fine
+status.BackgroundTransparency = 1
+status.Text = "🔹 Waiting for input..."
+status.TextColor3 = Theme.SubText
+status.Font = Enum.Font.Gotham
+status.TextSize = 15
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = content
+
 -- ==================== ACTION BUTTONS ====================
 local buttonY = 90
 local buttonWidth = 130
@@ -628,10 +641,12 @@ getKeyBtn.MouseButton1Click:Connect(function()
 	Notify({Title = "Demo Key", Content = "demo-key-123", SubContent = "Copied to clipboard", Duration = 3})
 	status.Text = "📋 Demo key copied!"
 	status.TextColor3 = Theme.Accent
+	print("Status updated to demo key copied") -- Debug
 	task.delay(1.5, function()
 		if status and status.Parent then
 			status.Text = "🔹 Waiting for input..."
 			status.TextColor3 = Theme.SubText
+			print("Status reverted") -- Debug
 		end
 	end)
 end)
@@ -640,13 +655,16 @@ end)
 local verifyBtn = createIconButton("Verify", ASSETS.Check, buttonWidth + spacing, Theme.DialogButton, true)
 verifyBtn.MouseButton1Click:Connect(function()
 	local key = textBox.Text:gsub("%s+", "")
+	print("Verify clicked, key = '" .. key .. "'") -- Debug
 	if key == "" then
 		status.Text = "❌ Please enter a key"
 		status.TextColor3 = Color3.fromRGB(220, 80, 80)
+		print("Status: empty key")
 		task.delay(2, function()
 			if status and status.Parent then
 				status.Text = "🔹 Waiting for input..."
 				status.TextColor3 = Theme.SubText
+				print("Status reverted")
 			end
 		end)
 		Notify({Title = "Error", Content = "Please enter a key.", Duration = 3})
@@ -655,6 +673,7 @@ verifyBtn.MouseButton1Click:Connect(function()
 	
 	status.Text = "🔍 Checking key..."
 	status.TextColor3 = Theme.Accent
+	print("Status: checking")
 	task.wait(0.5)
 	
 	local isValid = false
@@ -668,6 +687,7 @@ verifyBtn.MouseButton1Click:Connect(function()
 	if isValid then
 		status.Text = "✅ Loading main script..."
 		status.TextColor3 = Color3.fromRGB(80, 200, 120)
+		print("Status: loading script")
 		Notify({Title = "Success", Content = "Key verified! Loading external script...", Duration = 2})
 		
 		-- Fetch and execute external script
@@ -686,31 +706,25 @@ verifyBtn.MouseButton1Click:Connect(function()
 			else
 				status.Text = "❌ Load failed: " .. tostring(loadErr):sub(1, 30)
 				status.TextColor3 = Color3.fromRGB(220, 80, 80)
+				print("Status: load failed")
 				Notify({Title = "Error", Content = "Failed to load script: " .. tostring(loadErr):sub(1, 50), Duration = 5})
 			end
 		else
 			status.Text = "❌ Download failed"
 			status.TextColor3 = Color3.fromRGB(220, 80, 80)
+			print("Status: download failed")
 			Notify({Title = "Error", Content = "Failed to download external script.", Duration = 4})
 		end
 	else
 		status.Text = "❌ Invalid Key"
 		status.TextColor3 = Color3.fromRGB(220, 80, 80)
+		print("Status: invalid key")
 		Notify({Title = "Invalid Key", Content = "The key you entered is not valid.", Duration = 3})
 	end
 end)
 
--- ==================== STATUS LABEL ====================
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, 0, 0, 24)
+-- Update status position after buttons are placed (optional but good)
 status.Position = UDim2.new(0, 0, 0, buttonY + buttonHeight + 15)
-status.BackgroundTransparency = 1
-status.Text = "🔹 Waiting for input..."
-status.TextColor3 = Theme.SubText
-status.Font = Enum.Font.Gotham
-status.TextSize = 15
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = content
 
 -- ==================== USERNAME WITH GLITCH EFFECT ====================
 local usernameLabel = Instance.new("TextLabel")
