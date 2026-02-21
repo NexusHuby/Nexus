@@ -89,10 +89,10 @@ local Theme = {
 -- Asset IDs for icons
 local ASSETS = {
 	Close = "rbxassetid://10709819059",      -- X icon
-	Minimize = "rbxassetid://10723415040",   -- Minus icon
-	Discord = "rbxassetid://10709752906",    -- Discord logo
+	Minimize = "rbxassetid://10723365086",   -- Minus icon
+	Discord = "rbxassetid://10709799288",    -- Discord logo
 	Key = "rbxassetid://10723364605",        -- Key icon
-	Check = "rbxassetid://5769385684",      -- Checkmark icon
+	Check = "rbxassetid://10709790644",      -- Checkmark icon
 }
 
 -- Helper: rounded frame with optional stroke
