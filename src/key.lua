@@ -1,8 +1,9 @@
 --[[
-	🌹 Rose Theme Main Frame (Perfect Version)
+	🌹 Rose Theme Main Frame (Perfect Version + Tweaks)
 	Author: DeepSeek
 	Description: Full-featured key verification UI with all premium effects.
 	             Key = "key1". Window size: 440x400.
+	Changes: Faster minimize, fade-only close, closer buttons, status on Get Key.
 ]]
 
 local player = game.Players.LocalPlayer
@@ -405,14 +406,13 @@ local function createTitleBarButton(iconAssetId, posX, callback)
 	return btn
 end
 
--- Close button with smooth closing animation
+-- Close button with smooth fade-out only
 local closeBtn = createTitleBarButton(ASSETS.Close, -4, function()
 	if isClosing then return end
 	isClosing = true
-	-- Animate fade out and scale down
-	local closeTween = tweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		BackgroundTransparency = 1,
-		Size = UDim2.new(0, 0, 0, 0) -- Shrink to zero
+	-- Fade out only (no scale)
+	local closeTween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency = 1
 	})
 	closeTween:Play()
 	closeTween.Completed:Connect(function()
@@ -420,7 +420,7 @@ local closeBtn = createTitleBarButton(ASSETS.Close, -4, function()
 	end)
 end)
 
--- Minimize button with ultra-smooth animation
+-- Minimize button with faster animation
 local minimized = false
 local minBtn = createTitleBarButton(ASSETS.Minimize, -40, function()
 	if isAnimating or isClosing then return end
@@ -428,16 +428,16 @@ local minBtn = createTitleBarButton(ASSETS.Minimize, -40, function()
 	minimized = not minimized
 	
 	if minimized then
-		-- Smoothly collapse to title bar height with a buttery easing
+		-- Collapse to title bar height (0.3s)
 		local targetSize = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 42)
-		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize})
+		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize})
 		tween:Play()
 		tween.Completed:Connect(function()
 			isAnimating = false
 		end)
 	else
-		-- Smoothly expand back
-		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = originalSize})
+		-- Expand back (0.3s)
+		local tween = tweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = originalSize})
 		tween:Play()
 		tween.Completed:Connect(function()
 			isAnimating = false
@@ -516,7 +516,7 @@ end)
 local buttonY = 90
 local buttonWidth = 130
 local buttonHeight = 36
-local spacing = 20
+local spacing = 10  -- REDUCED FROM 20 TO 10
 
 local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 	local btn = Instance.new("TextButton")
@@ -623,6 +623,15 @@ local getKeyBtn = createIconButton("Get Key", ASSETS.Key, 0, Theme.Accent, true)
 getKeyBtn.MouseButton1Click:Connect(function()
 	copyToClipboard("key1")
 	Notify({Title = "Demo Key", Content = "key1", SubContent = "Copied to clipboard", Duration = 3})
+	-- Update status
+	status.Text = "📋 Demo key copied!"
+	status.TextColor3 = Theme.Accent
+	task.delay(1.5, function()
+		if status and status.Parent then
+			status.Text = "🔹 Waiting for input..."
+			status.TextColor3 = Theme.SubText
+		end
+	end)
 end)
 
 -- Create Verify button (with gradient) - now with working verification
