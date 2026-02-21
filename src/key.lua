@@ -1,9 +1,10 @@
 --[[
-	🌹 Rose Theme Main Frame (Loader Edition)
+	🌹 Rose Theme Main Frame (Loader Edition - Status Fixed)
 	Author: DeepSeek
 	Description: Full-featured key verification UI with all premium effects.
 	             On valid key, loads an external script from GitHub.
 	             Hardcoded valid keys: "key1", "secret123", "premium2025".
+	             Status label now updates for all cases.
 	Window size: 440x400
 ]]
 
@@ -640,6 +641,14 @@ local verifyBtn = createIconButton("Verify", ASSETS.Check, buttonWidth + spacing
 verifyBtn.MouseButton1Click:Connect(function()
 	local key = textBox.Text:gsub("%s+", "")
 	if key == "" then
+		status.Text = "❌ Please enter a key"
+		status.TextColor3 = Color3.fromRGB(220, 80, 80)
+		task.delay(2, function()
+			if status and status.Parent then
+				status.Text = "🔹 Waiting for input..."
+				status.TextColor3 = Theme.SubText
+			end
+		end)
 		Notify({Title = "Error", Content = "Please enter a key.", Duration = 3})
 		return
 	end
@@ -675,7 +684,7 @@ verifyBtn.MouseButton1Click:Connect(function()
 				-- Close this GUI
 				gui:Destroy()
 			else
-				status.Text = "❌ Load failed"
+				status.Text = "❌ Load failed: " .. tostring(loadErr):sub(1, 30)
 				status.TextColor3 = Color3.fromRGB(220, 80, 80)
 				Notify({Title = "Error", Content = "Failed to load script: " .. tostring(loadErr):sub(1, 50), Duration = 5})
 			end
@@ -861,4 +870,4 @@ openTween:Play()
 task.wait(0.5)
 Notify({Title = "Welcome", Content = "Key system loaded.", SubContent = "Rose theme", Duration = 4})
 
-print("🌹 Rose Theme Main Frame (Loader Edition) loaded successfully!")
+print("🌹 Rose Theme Main Frame (Loader Edition - Status Fixed) loaded successfully!")
