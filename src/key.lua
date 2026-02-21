@@ -1,9 +1,10 @@
 --[[
-	🌹 Rose Theme Main Frame (Final)
+	🌹 Rose Theme Main Frame (Loader Edition)
 	Author: DeepSeek
 	Description: Full-featured key verification UI with all premium effects.
-	             Key = "key1". Window size: 440x400.
-	Fixes: Sweep lines now properly destroy after reaching the end.
+	             On valid key, loads an external script from GitHub.
+	             Hardcoded valid keys: "key1", "secret123", "premium2025".
+	Window size: 440x400
 ]]
 
 local player = game.Players.LocalPlayer
@@ -17,6 +18,16 @@ gui.Parent = player:WaitForChild("PlayerGui")
 local tweenService = game:GetService("TweenService")
 local userInputService = game:GetService("UserInputService")
 local runService = game:GetService("RunService")
+
+-- ==================== CONFIGURATION ====================
+local VALID_KEYS = {
+	"key1",
+	"secret123",
+	"premium2025",
+	-- Add more keys as needed
+}
+
+local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/actual_script.lua" -- REPLACE THIS
 
 -- ==================== THEME (ROSE) ====================
 local Theme = {
@@ -465,7 +476,7 @@ local instr = Instance.new("TextLabel")
 instr.Size = UDim2.new(1, 0, 0, 20)
 instr.Position = UDim2.new(0, 0, 0, 0)
 instr.BackgroundTransparency = 1
-instr.Text = "Enter your key (try 'key1')"
+instr.Text = "Enter your key"
 instr.TextColor3 = Theme.SubText
 instr.Font = Enum.Font.Gotham
 instr.TextSize = 14
@@ -485,7 +496,7 @@ local textBox = Instance.new("TextBox")
 textBox.Size = UDim2.new(1, -12, 1, 0)
 textBox.Position = UDim2.new(0, 8, 0, 0)
 textBox.BackgroundTransparency = 1
-textBox.PlaceholderText = "e.g. key1"
+textBox.PlaceholderText = "Enter your key"
 textBox.PlaceholderColor3 = Theme.SubText
 textBox.Text = ""
 textBox.TextColor3 = Theme.Text
@@ -512,11 +523,11 @@ textBox.FocusLost:Connect(function()
 	indicator.Position = UDim2.new(0, 2, 1, -1)
 end)
 
--- ==================== ACTION BUTTONS WITH GRADIENT + CLEAN HOVER/CLICK EFFECTS ====================
+-- ==================== ACTION BUTTONS ====================
 local buttonY = 90
 local buttonWidth = 130
 local buttonHeight = 36
-local spacing = 10  -- Closer together
+local spacing = 10
 
 local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 	local btn = Instance.new("TextButton")
@@ -554,25 +565,19 @@ local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = btn
 
-	-- Add fade-out gradient if requested
 	if addGradient then
 		local gradient = Instance.new("UIGradient")
 		gradient.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0),    -- Left: opaque
-			NumberSequenceKeypoint.new(1, 0.7)    -- Right: semi-transparent
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(1, 0.7)
 		})
-		gradient.Rotation = 90  -- Horizontal gradient
+		gradient.Rotation = 90
 		gradient.Parent = btn
 	end
 
-	-- Store original values for animations
 	local originalSize = btn.Size
 	local originalColor = btn.BackgroundColor3
-
-	-- Hover effect: scale up slightly and brighten
-	local hoverTweenIn
-	local hoverTweenOut
-	local clickTween
+	local hoverTweenIn, hoverTweenOut, clickTween
 
 	local function playHoverIn()
 		if hoverTweenOut then hoverTweenOut:Cancel() end
@@ -592,17 +597,14 @@ local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 		hoverTweenOut:Play()
 	end
 
-	-- Click effect: quick scale down and back
 	local function playClick()
 		if clickTween then clickTween:Cancel() end
-		-- First scale down
 		clickTween = tweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, buttonWidth * 0.95, 0, buttonHeight * 0.95),
 			BackgroundColor3 = originalColor:Lerp(Color3.new(0, 0, 0), 0.1)
 		})
 		clickTween:Play()
 		clickTween.Completed:Connect(function()
-			-- Then scale back to normal
 			local returnTween = tweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = originalSize,
 				BackgroundColor3 = originalColor
@@ -618,12 +620,11 @@ local function createIconButton(text, iconAssetId, xPos, color, addGradient)
 	return btn
 end
 
--- Create Get Key button (with gradient)
+-- Get Key button
 local getKeyBtn = createIconButton("Get Key", ASSETS.Key, 0, Theme.Accent, true)
 getKeyBtn.MouseButton1Click:Connect(function()
-	copyToClipboard("key1")
-	Notify({Title = "Demo Key", Content = "key1", SubContent = "Copied to clipboard", Duration = 3})
-	-- Update status
+	copyToClipboard("demo-key-123")
+	Notify({Title = "Demo Key", Content = "demo-key-123", SubContent = "Copied to clipboard", Duration = 3})
 	status.Text = "📋 Demo key copied!"
 	status.TextColor3 = Theme.Accent
 	task.delay(1.5, function()
@@ -634,26 +635,55 @@ getKeyBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- Create Verify button (with gradient) - now with working verification
+-- Verify button – now loads external script on success
 local verifyBtn = createIconButton("Verify", ASSETS.Check, buttonWidth + spacing, Theme.DialogButton, true)
 verifyBtn.MouseButton1Click:Connect(function()
-	local key = textBox.Text:gsub("%s+", "")  -- Remove spaces
+	local key = textBox.Text:gsub("%s+", "")
 	if key == "" then
 		Notify({Title = "Error", Content = "Please enter a key.", Duration = 3})
 		return
 	end
 	
-	-- Show checking status
 	status.Text = "🔍 Checking key..."
 	status.TextColor3 = Theme.Accent
+	task.wait(0.5)
 	
-	-- Simulate network delay
-	task.wait(1)
+	local isValid = false
+	for _, validKey in ipairs(VALID_KEYS) do
+		if key == validKey then
+			isValid = true
+			break
+		end
+	end
 	
-	if key == "key1" then
-		status.Text = "✅ Key Verified!"
+	if isValid then
+		status.Text = "✅ Loading main script..."
 		status.TextColor3 = Color3.fromRGB(80, 200, 120)
-		Notify({Title = "Success", Content = "Key verified!", SubContent = "Welcome " .. player.Name, Duration = 4})
+		Notify({Title = "Success", Content = "Key verified! Loading external script...", Duration = 2})
+		
+		-- Fetch and execute external script
+		local success, result = pcall(function()
+			return game:HttpGet(EXTERNAL_SCRIPT_URL)
+		end)
+		
+		if success and result then
+			local loadSuccess, loadErr = pcall(function()
+				local func = loadstring(result)
+				if func then func() else error("Failed to compile") end
+			end)
+			if loadSuccess then
+				-- Close this GUI
+				gui:Destroy()
+			else
+				status.Text = "❌ Load failed"
+				status.TextColor3 = Color3.fromRGB(220, 80, 80)
+				Notify({Title = "Error", Content = "Failed to load script: " .. tostring(loadErr):sub(1, 50), Duration = 5})
+			end
+		else
+			status.Text = "❌ Download failed"
+			status.TextColor3 = Color3.fromRGB(220, 80, 80)
+			Notify({Title = "Error", Content = "Failed to download external script.", Duration = 4})
+		end
 	else
 		status.Text = "❌ Invalid Key"
 		status.TextColor3 = Color3.fromRGB(220, 80, 80)
@@ -736,7 +766,7 @@ spinner.Parent = spinnerHolder
 local spinTween = tweenService:Create(spinner, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, true), {Rotation = 360})
 spinTween:Play()
 
--- ==================== ORGANIC SWEEP LINE EFFECT (FIXED) ====================
+-- ==================== ORGANIC SWEEP LINE EFFECT ====================
 local function createSweepLine()
 	local line = Instance.new("Frame")
 	line.Name = "SweepLine"
@@ -758,9 +788,7 @@ local function createSweepLine()
 	local tween = tweenService:Create(line, tweenInfo, goal)
 	tween:Play()
 
-	-- Store flicker tweens so we can cancel them if needed
 	local flickerTweens = {}
-
 	local flickerSteps = math.random(3, 6)
 	for i = 1, flickerSteps do
 		task.wait(duration * i / flickerSteps * 0.5)
@@ -773,7 +801,6 @@ local function createSweepLine()
 	end
 
 	tween.Completed:Connect(function()
-		-- Cancel any remaining flicker tweens
 		for _, ft in ipairs(flickerTweens) do
 			ft:Cancel()
 		end
@@ -821,10 +848,9 @@ userInputService.InputChanged:Connect(function(input)
 end)
 
 -- ==================== OPENING ANIMATION ====================
--- Start small and transparent, then animate to full size
-mainFrame.Size = UDim2.new(0, 0, 0, 0)  -- Start at zero
+mainFrame.Size = UDim2.new(0, 0, 0, 0)
 mainFrame.BackgroundTransparency = 1
-task.wait()  -- Ensure frame is rendered
+task.wait()
 local openTween = tweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 	Size = originalSize,
 	BackgroundTransparency = bgTransparency
@@ -832,7 +858,7 @@ local openTween = tweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingS
 openTween:Play()
 
 -- Welcome notification
-task.wait(0.5)  -- Wait for opening animation to finish
+task.wait(0.5)
 Notify({Title = "Welcome", Content = "Key system loaded.", SubContent = "Rose theme", Duration = 4})
 
-print("🌹 Rose Theme Main Frame loaded successfully!")
+print("🌹 Rose Theme Main Frame (Loader Edition) loaded successfully!")
