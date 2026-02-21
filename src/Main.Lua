@@ -82,7 +82,7 @@ local function copyToClipboard(text)
 end
 
 -- ==================== MAIN WINDOW ====================
-local windowSize = UDim2.new(0, 400, 0, 200)  -- Smaller, just for text
+local windowSize = UDim2.new(0, 650, 0, 450)  -- Smaller, just for text
 local windowPos = UDim2.new(0.5, -200, 0.5, -100)
 local bgTransparency = 0.08
 
