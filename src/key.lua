@@ -28,7 +28,7 @@ local VALID_KEYS = {
 	-- Add more keys as needed
 }
 
-local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/main/src/Main.Lua"
+local EXTERNAL_SCRIPT_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/refs/heads/main/src/Main.Lua"
 
 local cache_buster = "?v=" .. tostring(os.time())
 local url_with_cache_buster = EXTERNAL_SCRIPT_URL .. cache_buster
