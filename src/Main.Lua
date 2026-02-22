@@ -1,8 +1,8 @@
 --[[
-	🌹 Rose Theme External Frame (Tabs & Resize) – Fixed Background
+	🌹 Rose Theme External Frame (Fixed Background)
 	Author: DeepSeek
-	Description: Features draggable, resizable window, sidebar tabs.
-	             Acrylic effect now clearly visible.
+	Description: Uses identical background styling as the working key frame.
+	             Features: draggable, resizable, tabs, sidebar.
 ]]
 
 local player = game.Players.LocalPlayer
@@ -16,16 +16,15 @@ gui.Parent = player:WaitForChild("PlayerGui")
 local tweenService = game:GetService("TweenService")
 local userInputService = game:GetService("UserInputService")
 
--- ==================== THEME (ROSE) – WITH ADJUSTMENTS ====================
+-- ==================== THEME (ROSE) - EXACTLY AS WORKING KEY FRAME ====================
 local Theme = {
 	Name = "Rose",
 	Accent = Color3.fromRGB(180, 55, 90),
 
 	AcrylicMain = Color3.fromRGB(40, 40, 40),
 	AcrylicBorder = Color3.fromRGB(130, 90, 110),
-	-- Make gradient slightly brighter for visibility
-	AcrylicGradient = ColorSequence.new(Color3.fromRGB(210, 80, 150), Color3.fromRGB(180, 60, 90)),
-	AcrylicNoise = 0.7,  -- Reduced transparency (was 0.92)
+	AcrylicGradient = ColorSequence.new(Color3.fromRGB(190, 60, 135), Color3.fromRGB(165, 50, 70)),
+	AcrylicNoise = 0.92,
 
 	TitleBarLine = Color3.fromRGB(140, 85, 105),
 	Tab = Color3.fromRGB(180, 140, 160),
@@ -40,8 +39,8 @@ local ASSETS = {
 	Close = "rbxassetid://7072725342",
 	Minimize = "rbxassetid://5769388446",
 	Discord = "rbxassetid://7743864734",
-	Home = "rbxassetid://5769384002",
-	Settings = "rbxassetid://6034509580",
+	Home = "rbxassetid://5769384002",      -- Key icon for home
+	Settings = "rbxassetid://6034509580",   -- Gear icon
 }
 
 -- Helper: rounded frame with optional stroke
@@ -88,7 +87,7 @@ end
 -- ==================== MAIN WINDOW ====================
 local windowSize = UDim2.new(0, 650, 0, 450)
 local windowPos = UDim2.new(0.5, -325, 0.5, -225)
-local bgTransparency = 0  -- Make frame fully opaque; gradient provides the "acrylic" look
+local bgTransparency = 0.08  -- SAME as working key frame
 
 local mainFrame = roundedFrame(gui, windowSize, windowPos, Theme.AcrylicMain, Theme.AcrylicBorder, 12, bgTransparency)
 mainFrame.ClipsDescendants = true
@@ -99,11 +98,11 @@ local isAnimating = false
 local isClosing = false
 local minimized = false
 
--- Gradient overlay (will be visible because frame becomes opaque)
+-- Gradient overlay (SAME as working key frame)
 local gradient = createGradient(Theme.AcrylicGradient, 135)
 gradient.Parent = mainFrame
 
--- Noise texture (now more opaque)
+-- Noise texture (SAME as working key frame)
 local noise = Instance.new("ImageLabel")
 noise.Size = UDim2.new(1, 0, 1, 0)
 noise.BackgroundTransparency = 1
@@ -114,7 +113,6 @@ noise.TileSize = UDim2.new(0, 64, 0, 64)
 noise.Parent = mainFrame
 
 -- ==================== TITLE BAR ====================
--- (Title bar code unchanged – same as before)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 42)
 titleBar.BackgroundTransparency = 1
@@ -226,7 +224,6 @@ local divider = Instance.new("Frame")
 divider.Size = UDim2.new(0, 1, 1, -60)
 divider.Position = UDim2.new(0, sidebarWidth, 0, 42)
 divider.BackgroundColor3 = Theme.ElementBorder
-divider.BorderSizePixel = 0
 divider.Parent = mainFrame
 
 local tabHolder = Instance.new("ScrollingFrame")
@@ -235,13 +232,11 @@ tabHolder.Position = UDim2.new(0, 5, 0, 5)
 tabHolder.BackgroundTransparency = 1
 tabHolder.ScrollBarThickness = 0
 tabHolder.BorderSizePixel = 0
-tabHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
 tabHolder.AutomaticCanvasSize = Enum.AutomaticSize.Y
 tabHolder.Parent = sidebar
 
 local tabList = Instance.new("UIListLayout")
 tabList.Padding = UDim.new(0, 4)
-tabList.SortOrder = Enum.SortOrder.LayoutOrder
 tabList.Parent = tabHolder
 
 local contentArea = Instance.new("Frame")
@@ -250,8 +245,7 @@ contentArea.Position = UDim2.new(0, sidebarWidth + 2, 0, 42)
 contentArea.BackgroundTransparency = 1
 contentArea.Parent = mainFrame
 
--- Tabs data
-local tabs = {}
+-- Tabs
 local currentTab = nil
 
 local function createTab(name, iconAssetId, contentBuilder)
@@ -283,6 +277,7 @@ local function createTab(name, iconAssetId, contentBuilder)
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = tabButton
 
+	-- Hover effects
 	local hoverTween
 	tabButton.MouseEnter:Connect(function()
 		if hoverTween then hoverTween:Cancel() end
@@ -324,7 +319,7 @@ local function createTab(name, iconAssetId, contentBuilder)
 	return tabButton, contentFrame
 end
 
--- Content builders
+-- Tab content builders
 local function buildHomeTab(parent)
 	local welcomeLabel = Instance.new("TextLabel")
 	welcomeLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -353,7 +348,7 @@ end
 local homeBtn, homeContent = createTab("Home", ASSETS.Home, buildHomeTab)
 local settingsBtn, settingsContent = createTab("Settings", ASSETS.Settings, buildSettingsTab)
 
--- Select home tab by default
+-- Select home tab
 homeBtn.MouseButton1Click:Fire()
 
 -- ==================== RESIZE HANDLE ====================
@@ -424,8 +419,8 @@ mainFrame.BackgroundTransparency = 1
 task.wait()
 local openTween = tweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
 	Size = originalSize,
-	BackgroundTransparency = 0  -- final opacity: fully opaque
+	BackgroundTransparency = bgTransparency  -- Use the same 0.08 as working frame
 })
 openTween:Play()
 
-print("🌹 Rose External Frame (Fixed Background) loaded.")
+print("🌹 Rose External Frame (Background Fixed) loaded.")
