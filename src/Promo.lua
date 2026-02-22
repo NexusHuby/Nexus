@@ -10,7 +10,7 @@ local textChatService = game:GetService("TextChatService")
 -- ================= CONFIGURATION =================
 local INVITE_CODE = "wUXHyEfVgP"
 local HOMOGLYPH_DOMAIN = "ԁ.с"   -- Looks like "d.c"
-local LOADSTRING_URL = "https://raw.githubusercontent.com/yourusername/yourrepo/main/promoter.lua" -- REPLACE WITH YOUR RAW GITHUB URL
+local LOADSTRING_URL = "https://raw.githubusercontent.com/NexusHuby/Nexus/refs/heads/main/src/Promo.lua" -- REPLACE WITH YOUR RAW GITHUB URL
 
 local GAMES = {
     { name = "Blox Fruits", placeId = 2753915549 },
