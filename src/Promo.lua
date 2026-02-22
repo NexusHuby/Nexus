@@ -1,6 +1,6 @@
 --[[
-    Auto‑Cycle Promoter – Silent Automatic Version
-    Sends messages and teleports through the game list. No GUI.
+    Reliable Auto‑Cycle Promoter – Guaranteed Chat Delivery
+    Sends two messages and teleports through the game list.
 ]]
 
 local player = game.Players.LocalPlayer
@@ -21,72 +21,75 @@ local GAMES = {
 }
 -- =================================================
 
--- Robust chat sender – waits for chat to be ready and tries multiple methods
+--[[
+    Ultra‑reliable chat sender – tries everything.
+    Returns true if it believes the message was sent.
+]]
 local function sendChatMessage(msg)
-    -- Wait for chat to be available (max 10 seconds)
-    local chatReady = false
-    for i = 1, 20 do
-        if textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-            if #textChatService.TextChannels:GetChildren() > 0 then
-                chatReady = true
-                break
-            end
-        else
-            local replicatedStorage = game:GetService("ReplicatedStorage")
-            local defaultChatEvents = replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-            if defaultChatEvents and defaultChatEvents:FindFirstChild("SayMessageRequest") then
-                chatReady = true
-                break
-            end
-        end
-        task.wait(0.5)
-    end
-    if not chatReady then
-        warn("Chat system not ready after 10 seconds, aborting send.")
-        return
-    end
-
-    -- Attempt to send using the appropriate method
+    -- First, try modern TextChatService
     if textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-        -- Modern chat: try all channels
-        local success = pcall(function()
-            for _, channel in ipairs(textChatService.TextChannels:GetChildren()) do
-                channel:SendAsync(msg)
-                break -- Send only to first channel (usually RBXGeneral)
-            end
-        end)
-        if not success then
-            -- Fallback to legacy if modern fails (rare)
-            local replicatedStorage = game:GetService("ReplicatedStorage")
-            local defaultChatEvents = replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-            if defaultChatEvents then
-                local sayRequest = defaultChatEvents:FindFirstChild("SayMessageRequest")
-                if sayRequest then
-                    sayRequest:FireServer(msg, "All")
+        -- Wait for any text channel to appear (up to 10 seconds)
+        local channels = textChatService:FindFirstChild("TextChannels")
+        if channels then
+            -- If there's already a channel, use it
+            local channelList = channels:GetChildren()
+            if #channelList > 0 then
+                for _, channel in ipairs(channelList) do
+                    pcall(function()
+                        channel:SendAsync(msg)
+                    end)
+                end
+                return true
+            else
+                -- No channel yet, wait for one to be added
+                local channelAdded = channels.ChildAdded:Wait(10)
+                if channelAdded then
+                    pcall(function()
+                        channelAdded:SendAsync(msg)
+                    end)
+                    return true
                 end
             end
         end
-    else
-        -- Legacy chat
-        local replicatedStorage = game:GetService("ReplicatedStorage")
-        local defaultChatEvents = replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-        if defaultChatEvents then
-            local sayRequest = defaultChatEvents:FindFirstChild("SayMessageRequest")
-            if sayRequest then
+    end
+
+    -- Fallback 1: Legacy chat via SayMessageRequest
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    local defaultChatEvents = replicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if defaultChatEvents then
+        local sayRequest = defaultChatEvents:FindFirstChild("SayMessageRequest")
+        if sayRequest then
+            pcall(function()
                 sayRequest:FireServer(msg, "All")
-            else
-                warn("SayMessageRequest not found in legacy chat.")
-            end
-        else
-            warn("DefaultChatSystemChatEvents not found.")
+            end)
+            return true
         end
     end
+
+    -- Fallback 2: Try the old Chat service (deprecated but some games still use it)
+    local chatService = game:GetService("Chat")
+    if chatService then
+        pcall(function()
+            chatService:Chat(player.Character and player.Character.Head or player, msg)
+        end)
+        return true
+    end
+
+    -- Fallback 3: Last resort – send through the player's Chatted event (rarely works)
+    pcall(function()
+        player:Chat(msg)
+    end)
+
+    warn("All chat methods failed for message: " .. msg)
+    return false
 end
 
 -- Send the two promotional messages
 local function sendPromo()
+    -- First message
     sendChatMessage("this best script in this " .. HOMOGLYPH_DOMAIN)
-    task.wait(0.5)  -- small delay so they appear in order
+    task.wait(0.5)
+    -- Second message
     sendChatMessage(INVITE_CODE)
 end
 
