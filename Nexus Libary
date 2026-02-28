@@ -125,10 +125,10 @@ end
 --  ICON IDS
 -- ══════════════════════════════════════════════════════════════════
 local IC = {
-    Close    = "rbxassetid://7072725342",
-    Minimize = "rbxassetid://7072719587",
-    Restore  = "rbxassetid://7072721988",
-    Menu     = "rbxassetid://3926305904",
+    Close    = "rbxassetid://10747384217",
+    Minimize = "rbxassetid://10734896029",
+    Restore  = "rbxassetid://10734932586",
+    Menu     = "rbxassetid://10709790757",
 }
 
 -- ══════════════════════════════════════════════════════════════════
