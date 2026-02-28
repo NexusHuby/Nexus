@@ -9,6 +9,7 @@
     Accent : Neon Green / Lime
     Notifs : Top-Right Corner
     Compat : PC + Mobile Touch
+    v2.0   : + ColorPicker  + Dropdown Search
 --]]
 
 local NexusLib = {}
@@ -192,31 +193,24 @@ local function PushNotif(title, body, dur, nType)
     Strk(card, accent, 1); Scanlines(card, 8001)
     GlowImg(card, accent, 0.80, 0)
 
-    -- left strip
     local strip = Fr(card, UDim2.new(0,3,1,-12), UDim2.new(0,5,0,6), accent, 2, 8003)
     do local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,accent); g.Rotation=90; g.Parent=strip end
 
-    -- corner bracket
     local bl = Lbl(card,"⌐",UDim2.new(0,18,0,18),UDim2.new(1,-20,0,2),accent,13,Enum.TextXAlignment.Center,8003)
     bl.BackgroundTransparency=1; bl.Font=Enum.Font.Code; bl.TextTransparency=0.45
 
-    -- icon
-    local ic = Lbl(card,sym,UDim2.new(0,22,0,22),UDim2.new(0,15,0,11),accent,18,Enum.TextXAlignment.Center,8003)
+    Lbl(card,sym,UDim2.new(0,22,0,22),UDim2.new(0,15,0,11),accent,18,Enum.TextXAlignment.Center,8003)
 
-    -- title
     local tl = Lbl(card,title or "Nexus",UDim2.new(1,-52,0,20),UDim2.new(0,44,0,10),T.TextBright,13,Enum.TextXAlignment.Left,8003)
     tl.Font = Enum.Font.Code
 
-    -- body
     local bl2 = Lbl(card,body or "",UDim2.new(1,-52,0,18),UDim2.new(0,44,0,32),T.TextMid,11,Enum.TextXAlignment.Left,8003)
     bl2.Font = Enum.Font.Gotham
 
-    -- progress bar
     local barBg = Fr(card, UDim2.new(1,0,0,2), UDim2.new(0,0,1,-2), T.BgVoid, 0, 8003)
     local barF  = Fr(barBg,UDim2.new(1,0,1,0),UDim2.new(0,0,0,0),accent,0,8004)
     do local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=barF end
 
-    -- slide in from right
     card.Position = UDim2.new(0, 320, 0, 0)
     Tw(card, {Position=UDim2.new(0,0,0,0)}, 0.38, Enum.EasingStyle.Back)
 
@@ -240,11 +234,9 @@ function NexusLib:LoadingSequence(scriptName)
     end)
     if not gameName or gameName=="" then pcall(function() gameName=game.Name end) end
 
-    -- Overlay
     local ov = Fr(Root,UDim2.new(1,0,1,0),UDim2.new(0,0,0,0),T.BgVoid,0,7000)
     Scanlines(ov, 7001)
 
-    -- Corner brackets
     for _,cd in ipairs({
         {UDim2.new(0,0,0,0),"┌"},{UDim2.new(1,-28,0,0),"┐"},
         {UDim2.new(0,0,1,-28),"└"},{UDim2.new(1,-28,1,-28),"┘"}
@@ -253,16 +245,13 @@ function NexusLib:LoadingSequence(scriptName)
         cl.Font=Enum.Font.Code; cl.TextTransparency=0.45
     end
 
-    -- Center card
     local card = Fr(ov,UDim2.new(0,340,0,172),UDim2.new(0.5,-170,0.5,-86),T.BgCard,12,7002)
     Strk(card,T.Neon,1.5); GlowImg(card,T.Neon,0.6,0); Scanlines(card,7003)
 
-    -- Top neon bar
     local tb = Fr(card,UDim2.new(1,0,0,3),UDim2.new(0,0,0,0),T.Neon,0,7004)
     Crn(tb,12)
     do local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=tb end
 
-    -- Title (terminal blink)
     local logoLbl = Lbl(card,"> NEXUS_",UDim2.new(1,0,0,50),UDim2.new(0,0,0,8),
         T.Neon,34,Enum.TextXAlignment.Center,7004)
     logoLbl.Font = Enum.Font.Code
@@ -274,33 +263,29 @@ function NexusLib:LoadingSequence(scriptName)
         end
     end)
 
-    -- Script subtitle
     local subL = Lbl(card,"// "..scriptName:upper(),
         UDim2.new(1,-40,0,16),UDim2.new(0,20,0,60),T.NeonDim,10,Enum.TextXAlignment.Left,7004)
     subL.Font=Enum.Font.Code
 
-    -- Status line
     local statL = Lbl(card,"",UDim2.new(1,-40,0,14),UDim2.new(0,20,0,84),
         T.TextMid,11,Enum.TextXAlignment.Left,7004)
     statL.Font=Enum.Font.Code
 
-    -- Progress track
     local trBg = Fr(card,UDim2.new(1,-40,0,5),UDim2.new(0,20,0,108),T.BgDeep,3,7004)
     Strk(trBg,T.Border,1)
     local trF = Fr(trBg,UDim2.new(0,0,1,0),UDim2.new(0,0,0,0),T.Neon,3,7005)
-    do local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=trF end
+    do
+        local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=trF
+    end
 
-    -- Pct label
     local pctL = Lbl(card,"0%",UDim2.new(0,40,0,12),UDim2.new(1,-42,0,104),
         T.Neon,10,Enum.TextXAlignment.Right,7004)
     pctL.Font=Enum.Font.Code
 
-    -- Watermark
     Lbl(card,"[ NEXUS UI LIB ] — PC + MOBILE",
         UDim2.new(1,0,0,12),UDim2.new(0,0,0,154),
         T.TextDim,8,Enum.TextXAlignment.Center,7004).Font=Enum.Font.Code
 
-    -- Entrance animation
     card.BackgroundTransparency=1
     card.Position=UDim2.new(0.5,-170,0.5,-66)
     Tw(card,{BackgroundTransparency=0,Position=UDim2.new(0.5,-170,0.5,-86)},0.5,Enum.EasingStyle.Back)
@@ -339,7 +324,6 @@ function NexusLib:CreateWindow(cfg)
     local wtitle = cfg.Title or "NEXUS"
     local Obj   = {}
 
-    -- Main frame
     local wi = #allWins
     local Main = Fr(Root, UDim2.new(0,WW,0,38),
         UDim2.new(0, 14+wi*(WW+14), 0, 14), T.BgMain, 10, 2)
@@ -347,16 +331,13 @@ function NexusLib:CreateWindow(cfg)
     Strk(Main, T.Neon, 1); GlowImg(Main, T.Neon, 0.88, 0)
     table.insert(allWins, Main)
 
-    -- Inner clip
     local Clip = Fr(Main, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), T.BgMain, 10, 1)
     Clip.ClipsDescendants = true; Clip.BackgroundTransparency = 1
     Scanlines(Clip, 1)
 
-    -- Title bar
     local TBar = Fr(Clip, UDim2.new(1,0,0,38), UDim2.new(0,0,0,0), T.TitleBg, 0, 3)
     Fr(TBar, UDim2.new(1,0,0,10), UDim2.new(0,0,1,-10), T.TitleBg, 0, 3)
 
-    -- Top neon gradient line
     local tLine = Fr(Clip, UDim2.new(1,0,0,2), UDim2.new(0,0,0,0), T.Neon, 0, 10)
     do local g=Instance.new("UIGradient")
         g.Color=ColorSequence.new({
@@ -368,14 +349,12 @@ function NexusLib:CreateWindow(cfg)
         }); g.Parent=tLine
     end
 
-    -- Terminal chevron + title
     local chev = Lbl(TBar,">",UDim2.new(0,18,1,0),UDim2.new(0,8,0,0),T.Neon,13,Enum.TextXAlignment.Left,4)
     chev.Font = Enum.Font.Code
 
     local TLbl = Lbl(TBar,wtitle:upper(),UDim2.new(1,-92,1,0),UDim2.new(0,24,0,0),T.TextBright,12,Enum.TextXAlignment.Left,4)
     TLbl.Font = Enum.Font.Code
 
-    -- Blinking cursor on title
     task.spawn(function()
         local b=true
         while TLbl and TLbl.Parent do
@@ -383,7 +362,7 @@ function NexusLib:CreateWindow(cfg)
         end
     end)
 
-    -- ── MINIMIZE IMAGE BUTTON ──────────────────────────────────
+    -- ── MINIMIZE ──────────────────────────────────────────────
     local MinBtn = Instance.new("ImageButton")
     MinBtn.Name="MinBtn"; MinBtn.Parent=TBar
     MinBtn.AnchorPoint=Vector2.new(1,0.5); MinBtn.Position=UDim2.new(1,-38,0.5,0)
@@ -395,7 +374,7 @@ function NexusLib:CreateWindow(cfg)
     MinBtn.MouseEnter:Connect(function() Tw(MinBtn,{BackgroundColor3=T.BgHover,ImageColor3=T.Neon},0.12) end)
     MinBtn.MouseLeave:Connect(function() Tw(MinBtn,{BackgroundColor3=T.BgElem,ImageColor3=T.NeonDim},0.12) end)
 
-    -- ── CLOSE IMAGE BUTTON ─────────────────────────────────────
+    -- ── CLOSE ─────────────────────────────────────────────────
     local CloseBtn = Instance.new("ImageButton")
     CloseBtn.Name="CloseBtn"; CloseBtn.Parent=TBar
     CloseBtn.AnchorPoint=Vector2.new(1,0.5); CloseBtn.Position=UDim2.new(1,-10,0.5,0)
@@ -412,12 +391,10 @@ function NexusLib:CreateWindow(cfg)
     end)
 
     -- ── TAB BAR ────────────────────────────────────────────────
-    -- Outer shell (hidden until Tab() is first called)
     local TabBarOuter = Fr(Clip,UDim2.new(1,0,0,0),UDim2.new(0,0,0,38),T.TitleBg,0,3)
-    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,1,-1),T.NeonDeep,0,4) -- bottom glow separator
-    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,0,0),T.Border,0,4)    -- top micro-line
+    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,1,-1),T.NeonDeep,0,4)
+    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,0,0),T.Border,0,4)
 
-    -- Scrollable so lots of tabs never overflow
     local TabBar = Instance.new("ScrollingFrame")
     TabBar.Parent=TabBarOuter; TabBar.BackgroundTransparency=1; TabBar.BorderSizePixel=0
     TabBar.Size=UDim2.new(1,0,1,-1); TabBar.Position=UDim2.new(0,0,0,0)
@@ -440,7 +417,6 @@ function NexusLib:CreateWindow(cfg)
     local CCli = Fr(Clip,UDim2.new(1,0,0,0),UDim2.new(0,0,0,CY),T.BgMain,0,2)
     CCli.ClipsDescendants=true
 
-    -- State
     local isMini=false; local tabsOn=false
     local openH=38; local tabPages={}; local activeTab=nil; local tOrd=0
 
@@ -451,7 +427,6 @@ function NexusLib:CreateWindow(cfg)
         CCli.Size=UDim2.new(1,0,0,h)
     end
 
-    -- Minimize logic
     local mCD=false
     MinBtn.MouseButton1Click:Connect(function()
         if mCD then return end; mCD=true
@@ -487,7 +462,7 @@ function NexusLib:CreateWindow(cfg)
         local E={}; local ord=0
         local function O() ord=ord+1; return ord end
 
-        -- SECTION
+        -- ── SECTION ───────────────────────────────────────────
         function E:Section(text)
             local row=Fr(page,UDim2.new(1,0,0,26),nil,T.BgSection,6,2)
             row.LayoutOrder=O(); Strk(row,T.Border,1)
@@ -497,7 +472,7 @@ function NexusLib:CreateWindow(cfg)
             sl.Font=Enum.Font.Code
         end
 
-        -- LABEL
+        -- ── LABEL ─────────────────────────────────────────────
         function E:Label(text)
             local row=Fr(page,UDim2.new(1,0,0,20),nil,nil,0,2)
             row.BackgroundTransparency=1; row.LayoutOrder=O()
@@ -506,7 +481,67 @@ function NexusLib:CreateWindow(cfg)
             return {SetText=function(_,t) l.Text=t end}
         end
 
-        -- BUTTON
+        -- ── PARAGRAPH ─────────────────────────────────────────
+        function E:Paragraph(title, body)
+            local row = Fr(page, UDim2.new(1,0,0,0), nil, T.BgSection, 6, 2)
+            row.LayoutOrder  = O()
+            row.AutomaticSize = Enum.AutomaticSize.Y
+            row.ClipsDescendants = false
+            Strk(row, T.Border, 1)
+
+            local innerLayout = Instance.new("UIListLayout"); innerLayout.Parent = row
+            innerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            innerLayout.Padding   = UDim.new(0, 3)
+
+            local innerPad = Instance.new("UIPadding"); innerPad.Parent = row
+            innerPad.PaddingLeft   = UDim.new(0, 10); innerPad.PaddingRight  = UDim.new(0, 10)
+            innerPad.PaddingTop    = UDim.new(0, 7);  innerPad.PaddingBottom = UDim.new(0, 7)
+
+            -- Optional title line
+            local tLbl
+            if title and title ~= "" then
+                tLbl = Instance.new("TextLabel"); tLbl.Parent = row
+                tLbl.BackgroundTransparency = 1
+                tLbl.Size          = UDim2.new(1, 0, 0, 0)
+                tLbl.AutomaticSize = Enum.AutomaticSize.Y
+                tLbl.Font          = Enum.Font.Code
+                tLbl.Text          = "// " .. title:upper()
+                tLbl.TextColor3    = T.Neon
+                tLbl.TextSize      = 11
+                tLbl.TextXAlignment = Enum.TextXAlignment.Left
+                tLbl.TextWrapped   = false
+                tLbl.ZIndex        = 3; tLbl.LayoutOrder = 1
+            end
+
+            -- Body text (grows automatically)
+            local bLbl = Instance.new("TextLabel"); bLbl.Parent = row
+            bLbl.BackgroundTransparency = 1
+            bLbl.Size          = UDim2.new(1, 0, 0, 0)
+            bLbl.AutomaticSize = Enum.AutomaticSize.Y
+            bLbl.Font          = Enum.Font.Gotham
+            bLbl.Text          = body or ""
+            bLbl.TextColor3    = T.TextMid
+            bLbl.TextSize      = 11
+            bLbl.TextWrapped   = true
+            bLbl.TextXAlignment = Enum.TextXAlignment.Left
+            bLbl.ZIndex        = 3; bLbl.LayoutOrder = 2
+
+            -- Return live-update handle
+            return {
+                SetTitle = function(_, t)
+                    if tLbl then tLbl.Text = "// " .. t:upper() end
+                end,
+                SetBody = function(_, b)
+                    bLbl.Text = b   -- AutomaticSize.Y handles resize + RefH fires automatically
+                end,
+                SetBodyColor = function(_, col)
+                    bLbl.TextColor3 = col
+                end,
+                GetBody = function(_) return bLbl.Text end,
+            }
+        end
+
+        -- ── BUTTON ────────────────────────────────────────────
         function E:Button(name, cb)
             cb=cb or function() end
             local row=Fr(page,UDim2.new(1,0,0,30),nil,T.BgElem,6,2)
@@ -538,7 +573,7 @@ function NexusLib:CreateWindow(cfg)
             end)
         end
 
-        -- TOGGLE
+        -- ── TOGGLE ────────────────────────────────────────────
         function E:Toggle(name, opts, cb)
             local def=opts.default or false; local loc=opts.location or {}; local flag=opts.flag or ""
             cb=cb or function() end; loc[flag]=def
@@ -546,25 +581,20 @@ function NexusLib:CreateWindow(cfg)
             local row=Fr(page,UDim2.new(1,0,0,34),nil,T.BgElem,6,2)
             row.LayoutOrder=O(); Strk(row,T.Border,1); row.ClipsDescendants=false
 
-            -- Name label
             local nl=Lbl(row,name,UDim2.new(1,-68,1,0),UDim2.new(0,10,0,0),T.TextBright,12,Enum.TextXAlignment.Left,3)
             nl.Font=Enum.Font.GothamBold
 
-            -- Pill container — ClipsDescendants TRUE so knob never bleeds outside
             local pill=Fr(row,UDim2.new(0,46,0,24),UDim2.new(1,-54,0.5,-12),
                 def and T.NeonDeep or T.BgDeep, 12, 3)
-            pill.ClipsDescendants=true                           -- ← fixes the block artifact
+            pill.ClipsDescendants=true
             Strk(pill, def and T.Neon or T.Border, 1)
 
-            -- Knob  (NO GlowImg — that was the bleeding block)
             local knob=Fr(pill,UDim2.new(0,20,0,20),
                 def and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10),
                 def and T.Neon or T.TextDim, 10, 4)
-            -- simple inner dot instead of glow image
             local dot=Fr(knob,UDim2.new(0,8,0,8),UDim2.new(0.5,-4,0.5,-4),
                 def and T.NeonBright or T.BgElem, 4, 5)
 
-            -- ON / OFF micro-label
             local stL=Instance.new("TextLabel"); stL.Parent=pill; stL.BackgroundTransparency=1
             stL.Size=UDim2.new(1,0,1,0); stL.Font=Enum.Font.Code
             stL.Text=def and "ON" or "OFF"
@@ -583,7 +613,6 @@ function NexusLib:CreateWindow(cfg)
                 stL.Text        = tog and "ON" or "OFF"
                 stL.TextColor3  = tog and T.Neon or T.TextDim
                 stL.TextXAlignment = tog and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
-                -- update stroke color
                 for _,c in ipairs(pill:GetChildren()) do
                     if c:IsA("UIStroke") then c.Color=tog and T.Neon or T.Border end
                 end
@@ -596,7 +625,7 @@ function NexusLib:CreateWindow(cfg)
             return {SetValue=function(_,v) if tog~=v then DoTog() end end, GetValue=function(_) return tog end}
         end
 
-        -- SLIDER
+        -- ── SLIDER ────────────────────────────────────────────
         function E:Slider(name, opts, cb)
             local mn=opts.min or 0; local mx=opts.max or 100
             local def=math.clamp(opts.default or mn,mn,mx)
@@ -646,13 +675,16 @@ function NexusLib:CreateWindow(cfg)
             return {SetValue=function(_,v) SV(v) end, GetValue=function(_) return loc[flag] end}
         end
 
-        -- DROPDOWN
+        -- ══════════════════════════════════════════════════════
+        --  DROPDOWN  ── with SEARCH BAR
+        -- ══════════════════════════════════════════════════════
         function E:Dropdown(name, opts, cb)
             local loc=opts.location or {}; local flag=opts.flag or ""
             local list=opts.list or {}; local PL=opts.PlayerList or false
             cb=cb or function() end
             if PL then list={}; for _,p in ipairs(Players:GetPlayers()) do table.insert(list,p.Name) end end
             loc[flag]=list[1]
+
             local row=Fr(page,UDim2.new(1,0,0,30),nil,T.BgElem,6,2)
             row.LayoutOrder=O(); Strk(row,T.Border,1)
             local nL=Lbl(row,name,UDim2.new(0.44,0,1,0),UDim2.new(0,9,0,0),T.TextDim,10,Enum.TextXAlignment.Left,3)
@@ -660,49 +692,136 @@ function NexusLib:CreateWindow(cfg)
             local vL=Lbl(row,tostring(list[1] or "--"),UDim2.new(0.48,0,1,0),UDim2.new(0.44,0,0,0),T.Neon,10,Enum.TextXAlignment.Right,3)
             vL.Font=Enum.Font.Code
             local arL=Lbl(row,"▾",UDim2.new(0,16,1,0),UDim2.new(1,-18,0,0),T.NeonDim,13,Enum.TextXAlignment.Center,3)
+
+            -- Panel — extra height reserved for search bar (30px)
             local panel=Fr(Main,UDim2.new(0,WW-16,0,0),nil,T.TitleBg,6,20)
             panel.Visible=false; panel.ClipsDescendants=true; Strk(panel,T.Neon,1)
+
+            -- ── Search textbox ──────────────────────────────────
+            local searchBox = Instance.new("TextBox")
+            searchBox.Parent         = panel
+            searchBox.BackgroundColor3 = T.BgDeep
+            searchBox.BorderSizePixel  = 0
+            searchBox.Position         = UDim2.new(0,4,0,4)
+            searchBox.Size             = UDim2.new(1,-8,0,22)
+            searchBox.Font             = Enum.Font.Code
+            searchBox.PlaceholderText  = ">_ search..."
+            searchBox.PlaceholderColor3 = T.TextDim
+            searchBox.Text             = ""
+            searchBox.TextColor3       = T.Neon
+            searchBox.TextSize         = 11
+            searchBox.TextXAlignment   = Enum.TextXAlignment.Left
+            searchBox.ZIndex           = 22
+            searchBox.ClearTextOnFocus = false
+            Crn(searchBox,4); Strk(searchBox,T.Border,1)
+            do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,6); p.Parent=searchBox end
+
+            -- Search icon label (left of textbox)
+            local sIcon = Instance.new("TextLabel")
+            sIcon.Parent             = panel
+            sIcon.BackgroundTransparency = 1
+            sIcon.Position           = UDim2.new(0,6,0,4)
+            sIcon.Size               = UDim2.new(0,18,0,22)
+            sIcon.Font               = Enum.Font.Code
+            sIcon.Text               = "⌕"
+            sIcon.TextColor3         = T.NeonDim
+            sIcon.TextSize           = 13
+            sIcon.ZIndex             = 23
+
+            -- Item list scrollframe sits below the search box
             local scr=Instance.new("ScrollingFrame"); scr.Parent=panel; scr.BackgroundTransparency=1
-            scr.BorderSizePixel=0; scr.Size=UDim2.new(1,0,1,0); scr.ScrollBarThickness=3
-            scr.ScrollBarImageColor3=T.Neon; scr.ZIndex=21; scr.CanvasSize=UDim2.new(0,0,0,0)
+            scr.BorderSizePixel=0; scr.Position=UDim2.new(0,0,0,30)
+            scr.Size=UDim2.new(1,0,1,-30)
+            scr.ScrollBarThickness=3; scr.ScrollBarImageColor3=T.Neon
+            scr.ZIndex=21; scr.CanvasSize=UDim2.new(0,0,0,0)
             scr.AutomaticCanvasSize=Enum.AutomaticSize.Y
             local sl2=Instance.new("UIListLayout"); sl2.Parent=scr; sl2.Padding=UDim.new(0,1)
+
             local isO=false; local dCD=false
-            local function ClsDD()
+
+            -- Forward declaration so PopulateItems can call ClsDD
+            local ClsDD
+
+            local function PopulateItems(filter)
+                -- Clear old buttons
+                for _,c in ipairs(scr:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+                local fl = (filter or ""):lower()
+                local count = 0
+                for _,item in ipairs(list) do
+                    local itemStr = tostring(item)
+                    -- Show item if filter is empty or item contains filter text
+                    if fl == "" or itemStr:lower():find(fl, 1, true) then
+                        count = count + 1
+                        local op=Instance.new("TextButton"); op.Parent=scr
+                        op.BackgroundTransparency=1
+                        op.Size=UDim2.new(1,0,0,26); op.Font=Enum.Font.Code
+                        op.Text="  > "..itemStr
+                        op.TextColor3 = (itemStr==tostring(vL.Text)) and T.Neon or T.TextMid
+                        op.TextSize=11; op.TextXAlignment=Enum.TextXAlignment.Left; op.ZIndex=22
+                        op.MouseEnter:Connect(function()
+                            Tw(op,{BackgroundColor3=T.NeonDeep,BackgroundTransparency=0,TextColor3=T.Neon},0.1)
+                        end)
+                        op.MouseLeave:Connect(function()
+                            Tw(op,{BackgroundTransparency=1,TextColor3=T.TextMid},0.1)
+                        end)
+                        op.MouseButton1Click:Connect(function()
+                            loc[flag]=item; vL.Text=itemStr; task.spawn(cb); ClsDD()
+                        end)
+                    end
+                end
+                -- Show "no results" hint if nothing matched
+                if count == 0 and fl ~= "" then
+                    local noRes = Instance.new("TextLabel"); noRes.Parent = scr
+                    noRes.BackgroundTransparency = 1
+                    noRes.Size = UDim2.new(1,0,0,26)
+                    noRes.Font = Enum.Font.Code
+                    noRes.Text = "  — no results —"
+                    noRes.TextColor3 = T.TextDim
+                    noRes.TextSize = 10
+                    noRes.TextXAlignment = Enum.TextXAlignment.Left
+                    noRes.ZIndex = 22
+                end
+            end
+
+            ClsDD = function()
                 if dCD then return end; dCD=true; isO=false; arL.Text="▾"
+                searchBox.Text = ""
                 Tw(panel,{Size=UDim2.new(0,WW-16,0,0)},0.18)
                 task.delay(0.2,function()
                     panel.Visible=false; dCD=false
-                    for _,c in ipairs(scr:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+                    for _,c in ipairs(scr:GetChildren()) do
+                        if c:IsA("TextButton") or c:IsA("TextLabel") then c:Destroy() end
+                    end
                 end)
             end
+
             local function OpnDD()
                 if dCD then return end; dCD=true; isO=true
                 if PL then list={}; for _,p in ipairs(Players:GetPlayers()) do table.insert(list,p.Name) end end
                 local rp=row.AbsolutePosition; local mp=Main.AbsolutePosition
                 panel.Position=UDim2.new(0,8,0,rp.Y-mp.Y+30); panel.Visible=true; arL.Text="▴"
-                Tw(panel,{Size=UDim2.new(0,WW-16,0,math.min(#list*26,120))},0.22,Enum.EasingStyle.Back)
-                for _,item in ipairs(list) do
-                    local op=Instance.new("TextButton"); op.Parent=scr; op.BackgroundTransparency=1
-                    op.Size=UDim2.new(1,0,0,26); op.Font=Enum.Font.Code
-                    op.Text="  > "..tostring(item)
-                    op.TextColor3=tostring(item)==vL.Text and T.Neon or T.TextMid
-                    op.TextSize=11; op.TextXAlignment=Enum.TextXAlignment.Left; op.ZIndex=22
-                    op.MouseEnter:Connect(function() Tw(op,{BackgroundColor3=T.NeonDeep,BackgroundTransparency=0,TextColor3=T.Neon},0.1) end)
-                    op.MouseLeave:Connect(function() Tw(op,{BackgroundTransparency=1,TextColor3=T.TextMid},0.1) end)
-                    op.MouseButton1Click:Connect(function()
-                        loc[flag]=item; vL.Text=tostring(item); task.spawn(cb); ClsDD()
-                    end)
-                end
+                searchBox.Text = ""
+                PopulateItems("")
+                -- +30 accounts for the search bar height inside the panel
+                local listH = math.min(#list*26, 120)
+                Tw(panel,{Size=UDim2.new(0,WW-16,0,listH+30)},0.22,Enum.EasingStyle.Back)
                 task.delay(0.25,function() dCD=false end)
             end
+
+            -- Live search filtering as user types
+            searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                if isO then PopulateItems(searchBox.Text) end
+            end)
+
             local hb=Instance.new("TextButton"); hb.Parent=row; hb.BackgroundTransparency=1
             hb.Size=UDim2.new(1,0,1,0); hb.Text=""; hb.ZIndex=5
             hb.MouseButton1Click:Connect(function() if isO then ClsDD() else OpnDD() end end)
             return {SetList=function(_,l) list=l end, GetValue=function(_) return loc[flag] end}
         end
 
-        -- TEXTBOX
+        -- ── TEXTBOX ───────────────────────────────────────────
         function E:Box(name, opts, cb)
             local def=opts.default or ""; local hold=opts.hold or "input..."
             local loc=opts.location or {}; local flag=opts.flag or ""
@@ -725,7 +844,7 @@ function NexusLib:CreateWindow(cfg)
             return {SetText=function(_,t) inp.Text=t; loc[flag]=t end, GetText=function(_) return loc[flag] end}
         end
 
-        -- KEYBIND
+        -- ── KEYBIND ───────────────────────────────────────────
         function E:Bind(name, opts, cb)
             local loc=opts.location or {}; local flag=opts.flag or ""; local def=opts.default or false
             cb=cb or function() end; loc[flag]=def
@@ -765,6 +884,264 @@ function NexusLib:CreateWindow(cfg)
             return {GetKey=function(_) return loc[flag] end}
         end
 
+        -- ══════════════════════════════════════════════════════
+        --  COLOR PICKER  ── HSV square + hue bar
+        -- ══════════════════════════════════════════════════════
+        function E:ColorPicker(name, opts, cb)
+            local def   = opts.default or Color3.fromRGB(0, 255, 80)
+            local loc   = opts.location or {}
+            local flag  = opts.flag or ""
+            cb = cb or function() end
+            loc[flag] = def
+
+            -- Working HSV state
+            local ch, cs, cv = def:ToHSV()
+
+            -- Helper → "#RRGGBB"
+            local function toHex(c)
+                return string.format("#%02X%02X%02X",
+                    math.round(c.R*255), math.round(c.G*255), math.round(c.B*255))
+            end
+
+            -- ── Collapsed row ───────────────────────────────────
+            local row = Fr(page, UDim2.new(1,0,0,32), nil, T.BgElem, 6, 2)
+            row.LayoutOrder = O(); Strk(row, T.Border, 1)
+
+            local nl = Lbl(row, name,
+                UDim2.new(0.48,0,1,0), UDim2.new(0,10,0,0),
+                T.TextBright, 12, Enum.TextXAlignment.Left, 3)
+            nl.Font = Enum.Font.Code
+
+            -- Small color swatch
+            local swatch = Fr(row, UDim2.new(0,26,0,18),
+                UDim2.new(1,-68,0.5,-9), def, 4, 4)
+            Strk(swatch, T.Border, 1)
+
+            -- Hex label next to swatch
+            local hexL = Lbl(row, toHex(def),
+                UDim2.new(0,56,1,0), UDim2.new(1,-64,0,0),
+                T.NeonDim, 9, Enum.TextXAlignment.Left, 3)
+            hexL.Font = Enum.Font.Code
+
+            -- Arrow indicator
+            local arrL = Lbl(row, "▾",
+                UDim2.new(0,16,1,0), UDim2.new(1,-18,0,0),
+                T.NeonDim, 13, Enum.TextXAlignment.Center, 3)
+
+            -- ── Floating picker panel ───────────────────────────
+            -- Layout: 6px pad | SQ_H SV square | 5px gap | 14px hue bar | 4px gap | 18px preview | 6px pad
+            local SQ_H    = 128
+            local PANEL_H = 6 + SQ_H + 5 + 14 + 4 + 18 + 6   -- = 181
+
+            local panel = Fr(Main, UDim2.new(0,WW-16,0,PANEL_H), nil, T.BgCard, 6, 20)
+            panel.Visible = false; panel.ClipsDescendants = false
+            Strk(panel, T.Neon, 1); GlowImg(panel, T.Neon, 0.86, 0)
+            Scanlines(panel, 21)
+
+            -- Top neon accent bar on panel
+            local panelBar = Fr(panel, UDim2.new(1,0,0,2), UDim2.new(0,0,0,0), T.Neon, 0, 22)
+            do local g=Instance.new("UIGradient")
+                g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=panelBar
+            end
+
+            -- ── SV Square ────────────────────────────────────────
+            -- Dimensions inside the panel (6px padding on each side)
+            local svSq = Fr(panel, UDim2.new(1,-12,0,SQ_H),
+                UDim2.new(0,6,0,6), Color3.fromRGB(255,255,255), 4, 21)
+            svSq.ClipsDescendants = false  -- cursor dot can peek out slightly
+
+            -- Layer 1: white → hue color (horizontal = saturation axis)
+            local satLayer = Fr(svSq, UDim2.new(1,0,1,0), nil,
+                Color3.fromRGB(255,255,255), 4, 22)
+            local satGrad = Instance.new("UIGradient")
+            satGrad.Color  = ColorSequence.new(Color3.fromRGB(255,255,255), Color3.fromHSV(ch,1,1))
+            satGrad.Parent = satLayer
+
+            -- Layer 2: transparent→black overlay (vertical = value axis)
+            -- Rotation=90: keypoint 0 = bottom, keypoint 1 = top
+            -- Transparency 0 = fully opaque black | 1 = fully transparent
+            -- So bottom is opaque black (low value), top is transparent (high value) ✓
+            local valLayer = Fr(svSq, UDim2.new(1,0,1,0), nil,
+                Color3.fromRGB(0,0,0), 4, 23)
+            local valGrad = Instance.new("UIGradient")
+            valGrad.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0),  -- bottom: opaque black
+                NumberSequenceKeypoint.new(1, 1),  -- top:    transparent
+            }
+            valGrad.Rotation = 90
+            valGrad.Parent   = valLayer
+
+            -- SV cursor (white ring with inner colored dot)
+            local svCur = Fr(svSq, UDim2.new(0,14,0,14), UDim2.new(cs, 0, 1-cv, 0),
+                T.White, 7, 28)
+            svCur.AnchorPoint = Vector2.new(0.5, 0.5)
+            Strk(svCur, T.Black, 2)
+            local svCurDot = Fr(svCur, UDim2.new(0,6,0,6),
+                UDim2.new(0.5,-3,0.5,-3), Color3.fromHSV(ch,cs,cv), 3, 29)
+
+            -- Invisible hit area on top for SV interaction
+            local svHit = Instance.new("TextButton")
+            svHit.Parent = svSq; svHit.BackgroundTransparency = 1
+            svHit.Size = UDim2.new(1,0,1,0); svHit.Text = ""; svHit.ZIndex = 30
+
+            -- ── Hue Bar ──────────────────────────────────────────
+            local hueY = 6 + SQ_H + 5
+            local hueBar = Fr(panel, UDim2.new(1,-12,0,14),
+                UDim2.new(0,6,0,hueY), T.White, 3, 21)
+            Strk(hueBar, T.Border, 1)
+            local hueGrad = Instance.new("UIGradient")
+            hueGrad.Color = ColorSequence.new{
+                ColorSequenceKeypoint.new(0/6, Color3.fromHSV(0/6, 1, 1)),
+                ColorSequenceKeypoint.new(1/6, Color3.fromHSV(1/6, 1, 1)),
+                ColorSequenceKeypoint.new(2/6, Color3.fromHSV(2/6, 1, 1)),
+                ColorSequenceKeypoint.new(3/6, Color3.fromHSV(3/6, 1, 1)),
+                ColorSequenceKeypoint.new(4/6, Color3.fromHSV(4/6, 1, 1)),
+                ColorSequenceKeypoint.new(5/6, Color3.fromHSV(5/6, 1, 1)),
+                ColorSequenceKeypoint.new(1,   Color3.fromHSV(0,   1, 1)),
+            }
+            hueGrad.Parent = hueBar
+
+            -- Hue cursor (thin vertical marker)
+            local hueCur = Fr(hueBar, UDim2.new(0,4,1,4),
+                UDim2.new(ch, 0, 0, -2), T.White, 2, 23)
+            hueCur.AnchorPoint = Vector2.new(0.5, 0)
+            Strk(hueCur, T.Black, 1)
+
+            -- Invisible hit area for hue bar
+            local hueHit = Instance.new("TextButton")
+            hueHit.Parent = hueBar; hueHit.BackgroundTransparency = 1
+            hueHit.Size = UDim2.new(1,0,1,0); hueHit.Text = ""; hueHit.ZIndex = 25
+
+            -- ── Preview / Info Row ───────────────────────────────
+            local prevY = hueY + 14 + 4
+            local prevFr = Fr(panel, UDim2.new(1,-12,0,18),
+                UDim2.new(0,6,0,prevY), T.BgDeep, 4, 21)
+            Strk(prevFr, T.Border, 1)
+
+            -- Large color swatch on left of preview
+            local bigSwatch = Fr(prevFr, UDim2.new(0,28,1,-4),
+                UDim2.new(0,2,0,2), def, 3, 22)
+
+            -- RGB text
+            local rgbL = Lbl(prevFr, "",
+                UDim2.new(1,-38,1,0), UDim2.new(0,36,0,0),
+                T.TextMid, 9, Enum.TextXAlignment.Left, 22)
+            rgbL.Font = Enum.Font.Code
+
+            -- ── Color update logic ───────────────────────────────
+            local function UpdateColor()
+                local col = Color3.fromHSV(ch, cs, cv)
+                loc[flag]  = col
+
+                -- Row swatch + hex label
+                swatch.BackgroundColor3    = col
+                hexL.Text                  = toHex(col)
+
+                -- Panel preview
+                bigSwatch.BackgroundColor3 = col
+                rgbL.Text = string.format("R:%d G:%d B:%d",
+                    math.round(col.R*255), math.round(col.G*255), math.round(col.B*255))
+
+                -- SV square: update the hue base color
+                satGrad.Color = ColorSequence.new(
+                    Color3.fromRGB(255,255,255), Color3.fromHSV(ch, 1, 1))
+
+                -- Move SV cursor
+                svCur.Position         = UDim2.new(cs, 0, 1-cv, 0)
+                svCurDot.BackgroundColor3 = col
+
+                -- Move hue cursor, tint it
+                hueCur.Position            = UDim2.new(ch, 0, 0, -2)
+                hueCur.BackgroundColor3    = Color3.fromHSV(ch, 1, 1)
+
+                task.spawn(cb, col)
+            end
+
+            -- ── SV Drag ──────────────────────────────────────────
+            local svDrag = false
+            local function ApplySV(pos)
+                local rp = svSq.AbsolutePosition
+                local rs = svSq.AbsoluteSize
+                if rs.X == 0 or rs.Y == 0 then return end
+                cs = math.clamp((pos.X - rp.X) / rs.X, 0, 1)
+                cv = 1 - math.clamp((pos.Y - rp.Y) / rs.Y, 0, 1)
+                UpdateColor()
+            end
+
+            svHit.InputBegan:Connect(function(i)
+                if isTouch(i) then svDrag = true; ApplySV(i.Position) end
+            end)
+
+            -- ── Hue Drag ─────────────────────────────────────────
+            local hueDrag = false
+            local function ApplyHue(pos)
+                local rp = hueBar.AbsolutePosition
+                local rs = hueBar.AbsoluteSize
+                if rs.X == 0 then return end
+                -- Clamp slightly below 1.0 so hue never wraps back to red
+                ch = math.clamp((pos.X - rp.X) / rs.X, 0, 0.9999)
+                UpdateColor()
+            end
+
+            hueHit.InputBegan:Connect(function(i)
+                if isTouch(i) then hueDrag = true; ApplyHue(i.Position) end
+            end)
+
+            -- Shared InputChanged for both drag targets
+            UserInputService.InputChanged:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseMovement
+                or i.UserInputType == Enum.UserInputType.Touch then
+                    if svDrag  then ApplySV(i.Position)  end
+                    if hueDrag then ApplyHue(i.Position) end
+                end
+            end)
+
+            UserInputService.InputEnded:Connect(function(i)
+                if isTouch(i) then
+                    svDrag  = false
+                    hueDrag = false
+                end
+            end)
+
+            -- Apply initial color on first render
+            task.defer(UpdateColor)
+
+            -- ── Open / Close toggle ──────────────────────────────
+            local isOpen = false
+            local pCD    = false
+            local rowHb  = Instance.new("TextButton")
+            rowHb.Parent = row; rowHb.BackgroundTransparency = 1
+            rowHb.Size = UDim2.new(1,0,1,0); rowHb.Text = ""; rowHb.ZIndex = 6
+            rowHb.MouseButton1Click:Connect(function()
+                if pCD then return end; pCD = true
+                isOpen = not isOpen
+                if isOpen then
+                    local rp = row.AbsolutePosition
+                    local mp = Main.AbsolutePosition
+                    panel.Position = UDim2.new(0, 8, 0, rp.Y - mp.Y + 32)
+                    panel.Size     = UDim2.new(0, WW-16, 0, 0)
+                    panel.Visible  = true
+                    Tw(panel, {Size=UDim2.new(0,WW-16,0,PANEL_H)}, 0.28, Enum.EasingStyle.Back)
+                    arrL.Text = "▴"
+                else
+                    Tw(panel, {Size=UDim2.new(0,WW-16,0,0)}, 0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+                    task.delay(0.2, function() panel.Visible = false end)
+                    arrL.Text = "▾"
+                end
+                task.delay(0.32, function() pCD = false end)
+            end)
+
+            -- ── Public API ───────────────────────────────────────
+            return {
+                GetValue = function(_) return loc[flag] end,
+                SetValue = function(_, col)
+                    local h2, s2, v2 = col:ToHSV()
+                    ch, cs, cv = h2, s2, v2
+                    UpdateColor()
+                end,
+            }
+        end
+
         return E
     end
 
@@ -772,17 +1149,14 @@ function NexusLib:CreateWindow(cfg)
     --  TAB CREATION
     -- ══════════════════════════════════════════════════════════
     function Obj:Tab(name)
-        -- First tab: reveal the tab bar and push content down
         if not tabsOn then
             tabsOn=true
-            TabBarOuter.Size = UDim2.new(1,0,0,36)     -- reveal tab bar row
-            CY  = 74                                     -- title(38) + tabbar(36)
+            TabBarOuter.Size = UDim2.new(1,0,0,36)
+            CY  = 74
             CCli.Position = UDim2.new(0,0,0,CY)
         end
         tOrd = tOrd+1
 
-        -- ── Tab button ────────────────────────────────────────
-        -- Width auto-fits text, clamped between 50 and 90
         local bW = math.max(50, math.min(90, (#name * 8) + 20))
 
         local tb = Instance.new("TextButton")
@@ -799,11 +1173,9 @@ function NexusLib:CreateWindow(cfg)
         tb.LayoutOrder      = tOrd
         Crn(tb, 5)
 
-        -- Active bg highlight (full button)
         local tbBg = Fr(tb, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), T.NeonDeep, 5, 4)
         tbBg.BackgroundTransparency = 1
 
-        -- Neon bottom underline bar
         local ul = Fr(tb, UDim2.new(1,0,0,2), UDim2.new(0,0,1,-2), T.Neon, 1, 6)
         ul.BackgroundTransparency = 1
         do
@@ -812,14 +1184,12 @@ function NexusLib:CreateWindow(cfg)
             g.Parent = ul
         end
 
-        -- Left neon tick (visible on active)
         local lTick = Fr(tb, UDim2.new(0,2,0.5,0), UDim2.new(0,0,0.25,-0), T.Neon, 1, 6)
         lTick.AnchorPoint = Vector2.new(0,0.5)
         lTick.Position    = UDim2.new(0,1,0.5,0)
         lTick.Size        = UDim2.new(0,2,0.5,0)
         lTick.BackgroundTransparency = 1
 
-        -- ── Page ──────────────────────────────────────────────
         local pg = Fr(CCli, UDim2.new(1,0,0,0), UDim2.new(0,0,0,0), nil, 0, 2)
         pg.BackgroundTransparency = 1; pg.Visible = false
 
@@ -838,18 +1208,15 @@ function NexusLib:CreateWindow(cfg)
 
         tabPages[name] = {btn=tb, bg=tbBg, page=pg, layout=pL, ul=ul, tick=lTick}
 
-        -- ── Activate ──────────────────────────────────────────
         local function Act()
             activeTab = name
             for _, td in pairs(tabPages) do
                 td.page.Visible = false
-                -- inactive state
                 Tw(td.btn,  {TextColor3=T.TextDim},        0.15)
                 Tw(td.bg,   {BackgroundTransparency=1},     0.15)
                 Tw(td.ul,   {BackgroundTransparency=1},     0.15)
                 Tw(td.tick, {BackgroundTransparency=1},     0.15)
             end
-            -- active state
             pg.Visible = true
             Tw(tb,    {TextColor3=T.Neon},              0.15)
             Tw(tbBg,  {BackgroundTransparency=0.78},    0.15)
@@ -859,7 +1226,6 @@ function NexusLib:CreateWindow(cfg)
         end
 
         tb.MouseButton1Click:Connect(Act)
-        -- Hover state (only for inactive tabs)
         tb.MouseEnter:Connect(function()
             if activeTab ~= name then
                 Tw(tb, {TextColor3=T.TextMid}, 0.12)
