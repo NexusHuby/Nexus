@@ -412,14 +412,28 @@ function NexusLib:CreateWindow(cfg)
     end)
 
     -- ── TAB BAR ────────────────────────────────────────────────
-    local TabBar = Fr(Clip,UDim2.new(1,0,0,0),UDim2.new(0,0,0,38),T.TitleBg,0,3)
-    Fr(TabBar,UDim2.new(1,0,0,1),UDim2.new(0,0,1,-1),T.Border,0,4)
+    -- Outer shell (hidden until Tab() is first called)
+    local TabBarOuter = Fr(Clip,UDim2.new(1,0,0,0),UDim2.new(0,0,0,38),T.TitleBg,0,3)
+    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,1,-1),T.NeonDeep,0,4) -- bottom glow separator
+    Fr(TabBarOuter,UDim2.new(1,0,0,1),UDim2.new(0,0,0,0),T.Border,0,4)    -- top micro-line
+
+    -- Scrollable so lots of tabs never overflow
+    local TabBar = Instance.new("ScrollingFrame")
+    TabBar.Parent=TabBarOuter; TabBar.BackgroundTransparency=1; TabBar.BorderSizePixel=0
+    TabBar.Size=UDim2.new(1,0,1,-1); TabBar.Position=UDim2.new(0,0,0,0)
+    TabBar.ScrollBarThickness=2; TabBar.ScrollBarImageColor3=T.NeonDeep
+    TabBar.ScrollingDirection=Enum.ScrollingDirection.X
+    TabBar.CanvasSize=UDim2.new(0,0,1,0); TabBar.AutomaticCanvasSize=Enum.AutomaticSize.X
+    TabBar.ZIndex=4
+
     local TbList = Instance.new("UIListLayout"); TbList.Parent=TabBar
     TbList.FillDirection=Enum.FillDirection.Horizontal
     TbList.HorizontalAlignment=Enum.HorizontalAlignment.Left
-    TbList.SortOrder=Enum.SortOrder.LayoutOrder; TbList.Padding=UDim.new(0,1)
+    TbList.VerticalAlignment=Enum.VerticalAlignment.Center
+    TbList.SortOrder=Enum.SortOrder.LayoutOrder; TbList.Padding=UDim.new(0,2)
     local TbPad=Instance.new("UIPadding"); TbPad.Parent=TabBar
-    TbPad.PaddingLeft=UDim.new(0,4); TbPad.PaddingTop=UDim.new(0,4)
+    TbPad.PaddingLeft=UDim.new(0,5); TbPad.PaddingRight=UDim.new(0,5)
+    TbPad.PaddingTop=UDim.new(0,4); TbPad.PaddingBottom=UDim.new(0,4)
 
     -- ── CONTENT CLIP ───────────────────────────────────────────
     local CY = 38
@@ -443,7 +457,7 @@ function NexusLib:CreateWindow(cfg)
         if mCD then return end; mCD=true
         if not isMini then
             isMini=true; MinBtn.Image=IC.Restore
-            local ch=tabsOn and 68 or 38
+            local ch=tabsOn and 74 or 38
             Tw(Main,{Size=UDim2.new(0,WW,0,ch)},0.22,Enum.EasingStyle.Quart)
             Tw(CCli,{Size=UDim2.new(1,0,0,0)},0.22,Enum.EasingStyle.Quart)
         else
@@ -528,32 +542,56 @@ function NexusLib:CreateWindow(cfg)
         function E:Toggle(name, opts, cb)
             local def=opts.default or false; local loc=opts.location or {}; local flag=opts.flag or ""
             cb=cb or function() end; loc[flag]=def
-            local row=Fr(page,UDim2.new(1,0,0,32),nil,T.BgElem,6,2)
-            row.LayoutOrder=O(); Strk(row,T.Border,1)
-            local nl=Lbl(row,name,UDim2.new(1,-60,1,0),UDim2.new(0,10,0,0),T.TextBright,12,Enum.TextXAlignment.Left,3)
+
+            local row=Fr(page,UDim2.new(1,0,0,34),nil,T.BgElem,6,2)
+            row.LayoutOrder=O(); Strk(row,T.Border,1); row.ClipsDescendants=false
+
+            -- Name label
+            local nl=Lbl(row,name,UDim2.new(1,-68,1,0),UDim2.new(0,10,0,0),T.TextBright,12,Enum.TextXAlignment.Left,3)
             nl.Font=Enum.Font.GothamBold
-            local pill=Fr(row,UDim2.new(0,42,0,22),UDim2.new(1,-50,0.5,-11),def and T.NeonDeep or T.BgDeep,11,3)
+
+            -- Pill container — ClipsDescendants TRUE so knob never bleeds outside
+            local pill=Fr(row,UDim2.new(0,46,0,24),UDim2.new(1,-54,0.5,-12),
+                def and T.NeonDeep or T.BgDeep, 12, 3)
+            pill.ClipsDescendants=true                           -- ← fixes the block artifact
             Strk(pill, def and T.Neon or T.Border, 1)
-            local knob=Fr(pill,UDim2.new(0,18,0,18),def and UDim2.new(1,-20,0.5,-9) or UDim2.new(0,2,0.5,-9),def and T.Neon or T.TextDim,9,4)
-            GlowImg(knob,T.Neon,0.78,0)
+
+            -- Knob  (NO GlowImg — that was the bleeding block)
+            local knob=Fr(pill,UDim2.new(0,20,0,20),
+                def and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10),
+                def and T.Neon or T.TextDim, 10, 4)
+            -- simple inner dot instead of glow image
+            local dot=Fr(knob,UDim2.new(0,8,0,8),UDim2.new(0.5,-4,0.5,-4),
+                def and T.NeonBright or T.BgElem, 4, 5)
+
+            -- ON / OFF micro-label
             local stL=Instance.new("TextLabel"); stL.Parent=pill; stL.BackgroundTransparency=1
             stL.Size=UDim2.new(1,0,1,0); stL.Font=Enum.Font.Code
-            stL.Text=def and "ON" or "OFF"; stL.TextColor3=def and T.Neon or T.TextDim
+            stL.Text=def and "ON" or "OFF"
+            stL.TextColor3=def and T.Neon or T.TextDim
             stL.TextSize=8; stL.ZIndex=5
             stL.TextXAlignment=def and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
             do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,4); p.PaddingRight=UDim.new(0,4); p.Parent=stL end
+
             local tog=def
             local function DoTog()
                 tog=not tog; loc[flag]=tog
-                local kp=tog and UDim2.new(1,-20,0.5,-9) or UDim2.new(0,2,0.5,-9)
-                Tw(pill,{BackgroundColor3=tog and T.NeonDeep or T.BgDeep},0.2)
-                Tw(knob,{Position=kp,BackgroundColor3=tog and T.Neon or T.TextDim},0.2,Enum.EasingStyle.Back)
-                stL.Text=tog and "ON" or "OFF"; stL.TextColor3=tog and T.Neon or T.TextDim
-                stL.TextXAlignment=tog and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
+                local kp=tog and UDim2.new(1,-22,0.5,-10) or UDim2.new(0,2,0.5,-10)
+                Tw(pill,  {BackgroundColor3=tog and T.NeonDeep or T.BgDeep}, 0.2)
+                Tw(knob,  {Position=kp, BackgroundColor3=tog and T.Neon or T.TextDim}, 0.2, Enum.EasingStyle.Back)
+                Tw(dot,   {BackgroundColor3=tog and T.NeonBright or T.BgElem}, 0.2)
+                stL.Text        = tog and "ON" or "OFF"
+                stL.TextColor3  = tog and T.Neon or T.TextDim
+                stL.TextXAlignment = tog and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
+                -- update stroke color
+                for _,c in ipairs(pill:GetChildren()) do
+                    if c:IsA("UIStroke") then c.Color=tog and T.Neon or T.Border end
+                end
                 task.spawn(cb)
             end
+
             local hb=Instance.new("TextButton"); hb.Parent=row; hb.BackgroundTransparency=1
-            hb.Size=UDim2.new(1,0,1,0); hb.Text=""; hb.ZIndex=5
+            hb.Size=UDim2.new(1,0,1,0); hb.Text=""; hb.ZIndex=6
             hb.MouseButton1Click:Connect(DoTog)
             return {SetValue=function(_,v) if tog~=v then DoTog() end end, GetValue=function(_) return tog end}
         end
@@ -734,41 +772,109 @@ function NexusLib:CreateWindow(cfg)
     --  TAB CREATION
     -- ══════════════════════════════════════════════════════════
     function Obj:Tab(name)
+        -- First tab: reveal the tab bar and push content down
         if not tabsOn then
-            tabsOn=true; TabBar.Size=UDim2.new(1,0,0,30)
-            CY=68; CCli.Position=UDim2.new(0,0,0,CY)
+            tabsOn=true
+            TabBarOuter.Size = UDim2.new(1,0,0,36)     -- reveal tab bar row
+            CY  = 74                                     -- title(38) + tabbar(36)
+            CCli.Position = UDim2.new(0,0,0,CY)
         end
-        tOrd=tOrd+1
-        local bW=math.max(44,math.min(80,(#name*7)+18))
-        local tb=Instance.new("TextButton"); tb.Parent=TabBar
-        tb.BackgroundColor3=T.BgVoid; tb.BackgroundTransparency=1; tb.BorderSizePixel=0
-        tb.Size=UDim2.new(0,bW,1,-4); tb.Font=Enum.Font.Code
-        tb.Text=name:upper(); tb.TextColor3=T.TextDim; tb.TextSize=10
-        tb.ZIndex=4; tb.LayoutOrder=tOrd; Crn(tb,4)
-        -- underline
-        local ul=Fr(tb,UDim2.new(0.8,0,0,2),UDim2.new(0.1,0,1,-2),T.Neon,1,5)
-        ul.BackgroundTransparency=1
-        do local g=Instance.new("UIGradient"); g.Color=ColorSequence.new(T.NeonDeep,T.NeonBright); g.Parent=ul end
-        -- page
-        local pg=Fr(CCli,UDim2.new(1,0,0,0),UDim2.new(0,0,0,0),nil,0,2); pg.BackgroundTransparency=1; pg.Visible=false
-        local pL=Instance.new("UIListLayout"); pL.Parent=pg; pL.SortOrder=Enum.SortOrder.LayoutOrder; pL.Padding=UDim.new(0,3)
-        local pP=Instance.new("UIPadding"); pP.Parent=pg
-        pP.PaddingLeft=UDim.new(0,6); pP.PaddingRight=UDim.new(0,6); pP.PaddingTop=UDim.new(0,5); pP.PaddingBottom=UDim.new(0,5)
+        tOrd = tOrd+1
+
+        -- ── Tab button ────────────────────────────────────────
+        -- Width auto-fits text, clamped between 50 and 90
+        local bW = math.max(50, math.min(90, (#name * 8) + 20))
+
+        local tb = Instance.new("TextButton")
+        tb.Parent           = TabBar
+        tb.BackgroundColor3 = T.BgVoid
+        tb.BackgroundTransparency = 1
+        tb.BorderSizePixel  = 0
+        tb.Size             = UDim2.new(0, bW, 1, 0)
+        tb.Font             = Enum.Font.Code
+        tb.Text             = name:upper()
+        tb.TextColor3       = T.TextDim
+        tb.TextSize         = 11
+        tb.ZIndex           = 5
+        tb.LayoutOrder      = tOrd
+        Crn(tb, 5)
+
+        -- Active bg highlight (full button)
+        local tbBg = Fr(tb, UDim2.new(1,0,1,0), UDim2.new(0,0,0,0), T.NeonDeep, 5, 4)
+        tbBg.BackgroundTransparency = 1
+
+        -- Neon bottom underline bar
+        local ul = Fr(tb, UDim2.new(1,0,0,2), UDim2.new(0,0,1,-2), T.Neon, 1, 6)
+        ul.BackgroundTransparency = 1
+        do
+            local g = Instance.new("UIGradient")
+            g.Color = ColorSequence.new(T.NeonDeep, T.NeonBright)
+            g.Parent = ul
+        end
+
+        -- Left neon tick (visible on active)
+        local lTick = Fr(tb, UDim2.new(0,2,0.5,0), UDim2.new(0,0,0.25,-0), T.Neon, 1, 6)
+        lTick.AnchorPoint = Vector2.new(0,0.5)
+        lTick.Position    = UDim2.new(0,1,0.5,0)
+        lTick.Size        = UDim2.new(0,2,0.5,0)
+        lTick.BackgroundTransparency = 1
+
+        -- ── Page ──────────────────────────────────────────────
+        local pg = Fr(CCli, UDim2.new(1,0,0,0), UDim2.new(0,0,0,0), nil, 0, 2)
+        pg.BackgroundTransparency = 1; pg.Visible = false
+
+        local pL = Instance.new("UIListLayout")
+        pL.Parent    = pg
+        pL.SortOrder = Enum.SortOrder.LayoutOrder
+        pL.Padding   = UDim.new(0, 3)
+
+        local pP = Instance.new("UIPadding"); pP.Parent = pg
+        pP.PaddingLeft   = UDim.new(0,6); pP.PaddingRight  = UDim.new(0,6)
+        pP.PaddingTop    = UDim.new(0,5); pP.PaddingBottom = UDim.new(0,5)
+
         pL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            if activeTab==name then RefH(pL) end
+            if activeTab == name then RefH(pL) end
         end)
-        tabPages[name]={btn=tb,page=pg,layout=pL,ul=ul}
+
+        tabPages[name] = {btn=tb, bg=tbBg, page=pg, layout=pL, ul=ul, tick=lTick}
+
+        -- ── Activate ──────────────────────────────────────────
         local function Act()
-            activeTab=name
-            for _,td in pairs(tabPages) do
-                td.page.Visible=false; Tw(td.btn,{TextColor3=T.TextDim,BackgroundTransparency=1},0.15); Tw(td.ul,{BackgroundTransparency=1},0.15)
+            activeTab = name
+            for _, td in pairs(tabPages) do
+                td.page.Visible = false
+                -- inactive state
+                Tw(td.btn,  {TextColor3=T.TextDim},        0.15)
+                Tw(td.bg,   {BackgroundTransparency=1},     0.15)
+                Tw(td.ul,   {BackgroundTransparency=1},     0.15)
+                Tw(td.tick, {BackgroundTransparency=1},     0.15)
             end
-            pg.Visible=true; Tw(tb,{TextColor3=T.Neon,BackgroundTransparency=0.85},0.15); Tw(ul,{BackgroundTransparency=0},0.15)
+            -- active state
+            pg.Visible = true
+            Tw(tb,    {TextColor3=T.Neon},              0.15)
+            Tw(tbBg,  {BackgroundTransparency=0.78},    0.15)
+            Tw(ul,    {BackgroundTransparency=0},        0.15)
+            Tw(lTick, {BackgroundTransparency=0},        0.15)
             RefH(pL)
         end
+
         tb.MouseButton1Click:Connect(Act)
-        if tOrd==1 then task.defer(Act) end
-        return BuildElems(pg,pL)
+        -- Hover state (only for inactive tabs)
+        tb.MouseEnter:Connect(function()
+            if activeTab ~= name then
+                Tw(tb, {TextColor3=T.TextMid}, 0.12)
+                Tw(tbBg, {BackgroundTransparency=0.92}, 0.12)
+            end
+        end)
+        tb.MouseLeave:Connect(function()
+            if activeTab ~= name then
+                Tw(tb, {TextColor3=T.TextDim}, 0.12)
+                Tw(tbBg, {BackgroundTransparency=1}, 0.12)
+            end
+        end)
+
+        if tOrd == 1 then task.defer(Act) end
+        return BuildElems(pg, pL)
     end
 
     -- ══════════════════════════════════════════════════════════
