@@ -5,54 +5,72 @@
     ╚════██║██╔══██║██╔══██║██║╚██╔╝██║██╔══██║██║╚██╗██║    ██╔══██╗██║██║   ██║
     ███████║██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║██║ ╚████║    ██████╔╝██║╚██████╔╝
     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝    ╚═════╝ ╚═╝ ╚═════╝
-    A wider, taller version of Shaman UI with the same components and aesthetic.
-    Window: 700 x 480  |  Sidebar: 150  |  Two columns: 265 each
+    v2.0  –  Big frame edition
+    ─────────────────────────────────────────────────────────────────────────────
+    NEW IN v2:
+      • Tab icons       – pass  Icon = "rbxassetid://…"  to window:Tab()
+      • Slider dot      – smooth circular thumb follows the fill bar
+      • Section state   – pass  Open = true/false  to tab:Section()
+                          (default = true → auto-expanded on load)
+      • Loading screen  – call  library:LoadingScreen("Script Name")
+                          before :Window() for an animated intro card
+      • Settings tab    – window:SettingsTab()  creates a built-in tab with
+                          save / load / delete / export / import / reset
+      • Polish          – unified dark palette, accent bar on selected tab,
+                          hover tints on buttons, tighter stroke colours
 --]]
 
+-- ══════════════════════════════════════════════════════════════════
+--  SERVICES
+-- ══════════════════════════════════════════════════════════════════
 local CoreGui          = game:GetService("CoreGui")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local Mouse            = game.Players.LocalPlayer:GetMouse()
+local HttpService      = game:GetService("HttpService")
+local Players          = game:GetService("Players")
+local Mouse            = Players.LocalPlayer:GetMouse()
 
 -- ══════════════════════════════════════════════════════════════════
---  CONSTANTS  (sizes are 1.55× the original Shaman frame)
+--  LAYOUT
 -- ══════════════════════════════════════════════════════════════════
-local WIN_W     = 700   -- was 450
-local WIN_H     = 480   -- was 321
-local TOPBAR_H  = 31    -- unchanged
-local SIDEBAR_W = 150   -- was 114
-local COL_W     = 265   -- was 168   (each column)
-local ELEM_W    = 258   -- was 162   (element width inside a column, accounting for padding)
-local CON_H     = WIN_H - TOPBAR_H   -- 449  was 291
-local COL_Y_OFF = TOPBAR_H / WIN_H   -- ~0.0646  (scale position for columns)
+local WIN_W     = 700
+local WIN_H     = 480
+local TOPBAR_H  = 31
+local SIDEBAR_W = 150
+local COL_W     = 265
+local ELEM_W    = 255          -- element width inside a column
+local CON_H     = WIN_H - TOPBAR_H
+local COL_Y_OFF = TOPBAR_H / WIN_H
 
 -- ══════════════════════════════════════════════════════════════════
---  SHARED  (per-library state, matching original architecture)
+--  PALETTE  (change here to re-theme)
+-- ══════════════════════════════════════════════════════════════════
+local AC   = Color3.fromRGB(48, 207, 106)   -- accent green
+local ACD  = Color3.fromRGB(30, 130,  65)   -- dim accent
+local GREY = Color3.fromRGB(68,  68,  68)   -- toggle/slider off
+
+-- ══════════════════════════════════════════════════════════════════
+--  SHARED STATE
 -- ══════════════════════════════════════════════════════════════════
 local Blacklist = {
     Enum.KeyCode.Unknown, Enum.KeyCode.CapsLock, Enum.KeyCode.Escape,
-    Enum.KeyCode.Tab, Enum.KeyCode.Return, Enum.KeyCode.Backspace,
-    Enum.KeyCode.Space, Enum.KeyCode.W, Enum.KeyCode.A,
-    Enum.KeyCode.S,    Enum.KeyCode.D,
+    Enum.KeyCode.Tab,     Enum.KeyCode.Return,   Enum.KeyCode.Backspace,
+    Enum.KeyCode.Space,   Enum.KeyCode.W,        Enum.KeyCode.A,
+    Enum.KeyCode.S,       Enum.KeyCode.D,
 }
-
-local TabSelected  = nil
-local EditOpened   = false
+local TabSelected   = nil
+local EditOpened    = false
 local ColorElements = {}
 
--- Rainbow loop for active color-edit mode
+-- rainbow cycle for colour-edit mode
 task.spawn(function()
     while true do
-        if EditOpened and next(ColorElements) ~= nil then
-            local hue   = tick() % 7 / 7
-            local color = Color3.fromHSV(hue, 1, 1)
-            for frame, v in pairs(ColorElements) do
+        if EditOpened and next(ColorElements) then
+            local c = Color3.fromHSV(tick() % 7 / 7, 1, 1)
+            for obj, v in pairs(ColorElements) do
                 if v.Enabled then
-                    if frame.ClassName == "Frame" then
-                        frame.BackgroundColor3 = color
-                    else
-                        frame.ImageColor3 = color
-                    end
+                    if obj.ClassName == "Frame" then obj.BackgroundColor3 = c
+                    else                             obj.ImageColor3      = c end
                 end
             end
         end
@@ -61,105 +79,246 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════
---  LIBRARY
+--  LIBRARY  TABLE
 -- ══════════════════════════════════════════════════════════════════
 local library = { Flags = {} }
 
--- ── executor compat ───────────────────────────────────────────────
-local request        = syn and syn.request or (http and http.request) or http_request or request or httprequest
+-- executor compat
+local request        = (syn and syn.request) or (http and http.request) or http_request or request or httprequest
 local getcustomasset = getcustomasset or getsynasset
-local isfolder       = isfolder or syn_isfolder or is_folder
-local makefolder     = makefolder or make_folder or createfolder or create_folder
+local isfolder       = isfolder  or syn_isfolder  or is_folder
+local makefolder     = makefolder or make_folder  or createfolder or create_folder
 
--- ── asset download (same folder as original so icons are shared) ──
-if not isfolder("Shaman") then
-    -- Download screen
-    local dl = Instance.new("ScreenGui"); dl.Name = "ShamanBigDownload"
-    dl.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; dl.Parent = CoreGui
-
-    local dlMain = Instance.new("Frame"); dlMain.AnchorPoint = Vector2.new(0.5, 0.5)
-    dlMain.BackgroundColor3 = Color3.fromRGB(27,27,27); dlMain.Position = UDim2.new(0.5,0,0.5,0)
-    dlMain.Size = UDim2.new(0,285,0,77); dlMain.Parent = dl
-    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,5); c.Parent=dlMain end
-    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(45,45,45); s.Parent=dlMain end
-
-    local dlTop = Instance.new("Frame"); dlTop.BackgroundColor3=Color3.fromRGB(25,25,25)
-    dlTop.Size=UDim2.new(0,285,0,31); dlTop.Parent=dlMain
-    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,5); c.Parent=dlTop end
-
-    local dlTitle = Instance.new("TextLabel"); dlTitle.Font=Enum.Font.GothamBold
-    dlTitle.Text="Downloading Assets"; dlTitle.TextColor3=Color3.fromRGB(255,255,255)
-    dlTitle.TextSize=12; dlTitle.BackgroundTransparency=1
-    dlTitle.Position=UDim2.new(0.005,0,0,0); dlTitle.Size=UDim2.new(0,284,0,30)
-    dlTitle.ZIndex=2; dlTitle.Parent=dlTop
-
-    local dlText = Instance.new("TextLabel"); dlText.Font=Enum.Font.GothamBold
-    dlText.Text="Loading..."; dlText.TextColor3=Color3.fromRGB(237,237,237); dlText.TextSize=11
-    dlText.BackgroundTransparency=1; dlText.Position=UDim2.new(0.005,0,0.39,0)
-    dlText.Size=UDim2.new(0,284,0,46); dlText.Parent=dlMain
-
-    makefolder("Shaman")
-    local assets = {
-        {"Circle",       "https://raw.githubusercontent.com/Rain-Design/Icons/main/Circle.png"},
-        {"ColorDropper", "https://raw.githubusercontent.com/Rain-Design/Icons/main/ColorDropper.png"},
-        {"Close",        "https://raw.githubusercontent.com/Rain-Design/Icons/main/Close.png"},
-        {"CollapseArrow","https://raw.githubusercontent.com/Rain-Design/Icons/main/CollapseArrow.png"},
-        {"RadioButton",  "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioButton.png"},
-        {"RadioOuter",   "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioOuter.png"},
-        {"RadioInner",   "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioInner.png"},
-    }
-    for _, a in ipairs(assets) do
-        local res = request({ Url = a[2], Method = "GET" })
-        writefile("Shaman/" .. a[1] .. ".png", res.Body)
-        dlText.Text = "Downloaded: " .. a[1] .. ".png"
-    end
-    dl:Destroy()
+-- ══════════════════════════════════════════════════════════════════
+--  CONFIG FOLDER
+-- ══════════════════════════════════════════════════════════════════
+local CFG_FOLDER = "ShamanBig"
+if not isfolder(CFG_FOLDER) then pcall(makefolder, CFG_FOLDER) end
+local function cfgPath(n)   return CFG_FOLDER.."/"..n..".json" end
+local function listConfigs()
+    if not listfiles then return {} end
+    local out = {}
+    pcall(function()
+        for _, f in ipairs(listfiles(CFG_FOLDER)) do
+            local n = f:match("[/\\]?([^/\\]+)%.json$")
+            if n then table.insert(out, n) end
+        end
+    end)
+    table.sort(out); return out
 end
 
 -- ══════════════════════════════════════════════════════════════════
---  HELPER: mouse-relative XY (used by sliders)
+--  ASSET DOWNLOAD  (uses / shares the Shaman/ folder)
 -- ══════════════════════════════════════════════════════════════════
-function library:GetXY(GuiObject)
-    local Max = GuiObject.AbsoluteSize.X
-    local Px  = math.clamp(Mouse.X - GuiObject.AbsolutePosition.X, 0, Max)
-    return Px / Max, 0
+if not isfolder("Shaman") then
+    -- small download UI
+    local dlGui  = Instance.new("ScreenGui"); dlGui.Name = "ShamanDL"
+    dlGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; dlGui.Parent = CoreGui
+
+    local dlCard = Instance.new("Frame")
+    dlCard.AnchorPoint = Vector2.new(.5,.5)
+    dlCard.BackgroundColor3 = Color3.fromRGB(22,22,22)
+    dlCard.Position = UDim2.new(.5,0,.5,0); dlCard.Size = UDim2.new(0,300,0,96)
+    dlCard.BorderSizePixel = 0; dlCard.Parent = dlGui
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,7); c.Parent=dlCard end
+    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(50,50,50); s.Parent=dlCard end
+
+    local dlTop = Instance.new("Frame"); dlTop.BackgroundColor3 = Color3.fromRGB(17,17,17)
+    dlTop.Size = UDim2.new(1,0,0,32); dlTop.BorderSizePixel=0; dlTop.Parent=dlCard
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,7); c.Parent=dlTop end
+    local dlFix=Instance.new("Frame"); dlFix.BackgroundColor3=Color3.fromRGB(17,17,17)
+    dlFix.BorderSizePixel=0; dlFix.Position=UDim2.new(0,0,.5,0); dlFix.Size=UDim2.new(1,0,.5,0); dlFix.Parent=dlTop
+
+    local dlTitle = Instance.new("TextLabel"); dlTitle.Font=Enum.Font.GothamBold
+    dlTitle.Text="Downloading Assets"; dlTitle.TextColor3=Color3.fromRGB(240,240,240)
+    dlTitle.TextSize=12; dlTitle.BackgroundTransparency=1; dlTitle.TextXAlignment=Enum.TextXAlignment.Left
+    dlTitle.Position=UDim2.new(0,.015*300,0,0); dlTitle.Size=UDim2.new(1,0,1,0); dlTitle.ZIndex=2; dlTitle.Parent=dlTop
+
+    -- progress bar
+    local barBg=Instance.new("Frame"); barBg.BackgroundColor3=Color3.fromRGB(38,38,38)
+    barBg.BorderSizePixel=0; barBg.Position=UDim2.new(.03,0,0,42); barBg.Size=UDim2.new(.94,0,0,4); barBg.Parent=dlCard
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=barBg end
+    local barFill=Instance.new("Frame"); barFill.BackgroundColor3=AC; barFill.BorderSizePixel=0
+    barFill.Size=UDim2.new(0,0,1,0); barFill.Parent=barBg
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=barFill end
+
+    local dlText = Instance.new("TextLabel"); dlText.Font=Enum.Font.Gotham
+    dlText.Text="Initialising..."; dlText.TextColor3=Color3.fromRGB(190,190,190); dlText.TextSize=11
+    dlText.BackgroundTransparency=1; dlText.TextXAlignment=Enum.TextXAlignment.Left
+    dlText.Position=UDim2.new(.03,0,0,52); dlText.Size=UDim2.new(.94,0,0,36); dlText.Parent=dlCard
+
+    makefolder("Shaman")
+    local assets = {
+        {"Circle",        "https://raw.githubusercontent.com/Rain-Design/Icons/main/Circle.png"},
+        {"ColorDropper",  "https://raw.githubusercontent.com/Rain-Design/Icons/main/ColorDropper.png"},
+        {"Close",         "https://raw.githubusercontent.com/Rain-Design/Icons/main/Close.png"},
+        {"CollapseArrow", "https://raw.githubusercontent.com/Rain-Design/Icons/main/CollapseArrow.png"},
+        {"RadioButton",   "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioButton.png"},
+        {"RadioOuter",    "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioOuter.png"},
+        {"RadioInner",    "https://raw.githubusercontent.com/Rain-Design/Icons/main/RadioInner.png"},
+    }
+    for i, a in ipairs(assets) do
+        local res = request({ Url=a[2], Method="GET" })
+        writefile("Shaman/"..a[1]..".png", res.Body)
+        dlText.Text = "["..i.."/"..#assets.."]  "..a[1]..".png"
+        TweenService:Create(barFill, TweenInfo.new(.2), {Size=UDim2.new(i/#assets,0,1,0)}):Play()
+        task.wait(.04)
+    end
+    task.wait(.25); dlGui:Destroy()
+end
+
+-- ══════════════════════════════════════════════════════════════════
+--  MOUSE XY  helper (sliders)
+-- ══════════════════════════════════════════════════════════════════
+function library:GetXY(obj)
+    local max = obj.AbsoluteSize.X
+    return math.clamp(Mouse.X - obj.AbsolutePosition.X, 0, max) / max, 0
+end
+
+-- ══════════════════════════════════════════════════════════════════
+--  LOADING SCREEN
+--  Call before :Window() – shows an animated intro card.
+--  Returns a handle with :AndThen(fn) so you can chain code.
+-- ══════════════════════════════════════════════════════════════════
+function library:LoadingScreen(scriptName)
+    scriptName = scriptName or "Script"
+
+    local gameName = "Unknown Game"
+    pcall(function()
+        gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+    end)
+    if not gameName or gameName == "" then pcall(function() gameName = game.Name end) end
+
+    local sg = Instance.new("ScreenGui"); sg.Name="ShamanLoading"
+    sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; sg.IgnoreGuiInset=true; sg.Parent=CoreGui
+
+    -- full overlay
+    local ov = Instance.new("Frame"); ov.Size=UDim2.new(1,0,1,0)
+    ov.BackgroundColor3=Color3.fromRGB(10,10,10); ov.BackgroundTransparency=0
+    ov.BorderSizePixel=0; ov.ZIndex=9000; ov.Parent=sg
+
+    -- card
+    local card = Instance.new("Frame"); card.AnchorPoint=Vector2.new(.5,.5)
+    card.BackgroundColor3=Color3.fromRGB(20,20,20); card.BorderSizePixel=0
+    card.Position=UDim2.new(.5,0,.5,30); card.Size=UDim2.new(0,360,0,190)
+    card.BackgroundTransparency=1; card.ZIndex=9001; card.Parent=sg
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,8); c.Parent=card end
+    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(48,48,48); s.Thickness=1; s.Parent=card end
+
+    -- coloured top strip
+    local topStrip = Instance.new("Frame"); topStrip.BackgroundColor3=AC
+    topStrip.BorderSizePixel=0; topStrip.Size=UDim2.new(1,0,0,3); topStrip.ZIndex=9002; topStrip.Parent=card
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,8); c.Parent=topStrip end
+    local stripFix = Instance.new("Frame"); stripFix.BackgroundColor3=AC; stripFix.BorderSizePixel=0
+    stripFix.Position=UDim2.new(0,0,.5,0); stripFix.Size=UDim2.new(1,0,.5,0); stripFix.ZIndex=9002; stripFix.Parent=topStrip
+
+    local function Lbl(txt, fs, col, ox, oy, sw, sh, bold)
+        local l=Instance.new("TextLabel"); l.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
+        l.Text=txt; l.TextSize=fs; l.TextColor3=col; l.BackgroundTransparency=1
+        l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=9002; l.Parent=card
+        l.Position=UDim2.new(0,ox,0,oy); l.Size=UDim2.new(0,sw,0,sh)
+        return l
+    end
+
+    Lbl("SHAMAN BIG",  22, Color3.fromRGB(245,245,245),  14, 14, 240, 28, true)
+    Lbl("// "..scriptName, 11, Color3.fromRGB(130,130,130), 14, 44, 300, 16, false)
+    local statLbl = Lbl("Initialising...", 11, Color3.fromRGB(175,175,175), 14, 66, 320, 16, false)
+
+    -- progress bar
+    local pBg=Instance.new("Frame"); pBg.BackgroundColor3=Color3.fromRGB(36,36,36)
+    pBg.BorderSizePixel=0; pBg.Position=UDim2.new(0,14,0,94); pBg.Size=UDim2.new(0,332,0,5)
+    pBg.ZIndex=9002; pBg.Parent=card
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=pBg end
+    local pFill=Instance.new("Frame"); pFill.BackgroundColor3=AC; pFill.BorderSizePixel=0
+    pFill.Size=UDim2.new(0,0,1,0); pFill.ZIndex=9003; pFill.Parent=pBg
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=pFill end
+
+    local pctLbl=Lbl("0%", 11, AC, 0, 86, 346, 16, true)
+    pctLbl.TextXAlignment=Enum.TextXAlignment.Right
+
+    -- separator + footer
+    local sep=Instance.new("Frame"); sep.BackgroundColor3=Color3.fromRGB(42,42,42)
+    sep.BorderSizePixel=0; sep.Position=UDim2.new(0,14,0,116); sep.Size=UDim2.new(0,332,0,1); sep.ZIndex=9002; sep.Parent=card
+    Lbl(gameName, 10, Color3.fromRGB(95,95,95),   14, 122, 240, 14, false)
+    Lbl("RightAlt → toggle visibility", 10, Color3.fromRGB(75,75,75), 14, 140, 300, 14, false)
+
+    local doneCb = nil
+
+    -- animate in
+    TweenService:Create(card, TweenInfo.new(.5, Enum.EasingStyle.Back), {
+        BackgroundTransparency=0, Position=UDim2.new(.5,0,.5,0)
+    }):Play()
+
+    local steps = {
+        {t="Scanning environment...",       p=.18, d=.40},
+        {t="Loading game data…",            p=.38, d=.50},
+        {t="Injecting modules…",            p=.62, d=.45},
+        {t="Applying patches…",             p=.84, d=.40},
+        {t=scriptName.." ready.",           p=1.0, d=.38},
+    }
+
+    task.spawn(function()
+        task.wait(.55)
+        for _, s in ipairs(steps) do
+            task.wait(s.d)
+            statLbl.Text = s.t
+            pctLbl.Text  = math.floor(s.p*100).."%"
+            TweenService:Create(pFill, TweenInfo.new(.32, Enum.EasingStyle.Quart), {Size=UDim2.new(s.p,0,1,0)}):Play()
+        end
+        task.wait(.7)
+        TweenService:Create(card, TweenInfo.new(.38, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+            {BackgroundTransparency=1, Position=UDim2.new(.5,0,.44,0)}):Play()
+        TweenService:Create(ov,   TweenInfo.new(.45), {BackgroundTransparency=1}):Play()
+        task.wait(.5); sg:Destroy()
+        if doneCb then doneCb() end
+    end)
+
+    local handle = {}
+    function handle:AndThen(fn) doneCb = fn end
+    return handle
 end
 
 -- ══════════════════════════════════════════════════════════════════
 --  WINDOW
 -- ══════════════════════════════════════════════════════════════════
 function library:Window(Info)
+    Info      = Info or {}
     Info.Text = Info.Text or "Shaman"
 
-    local window = {}
+    local window   = {}
+    local winFlags = {}  -- per-window flag registry  { [flagName] = {get,set,type,default} }
 
-    -- ── screen guis ───────────────────────────────────────────────
-    local shamanGui  = Instance.new("ScreenGui"); shamanGui.Name  = "ShamanBig";  shamanGui.Parent  = CoreGui
-    local tooltipGui = Instance.new("ScreenGui"); tooltipGui.Name = "ShamanBigTooltips"; tooltipGui.Parent = CoreGui
-
-    -- ── tooltip helpers ───────────────────────────────────────────
-    local function MakeTooltip(text)
-        local tip = Instance.new("Frame"); tip.AnchorPoint=Vector2.new(0.5,0)
-        tip.BackgroundColor3=Color3.fromRGB(79,79,79); tip.Visible=false
-        tip.Size=UDim2.new(0,100,0,19); tip.ZIndex=5; tip.Parent=tooltipGui
-        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=tip end
-        do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(98,98,98); s.Parent=tip end
-        local tl=Instance.new("TextLabel"); tl.Font=Enum.Font.GothamBold; tl.Text=text
-        tl.TextColor3=Color3.fromRGB(217,217,217); tl.TextSize=11; tl.BackgroundTransparency=1
-        tl.Size=UDim2.new(0,100,0,19); tl.ZIndex=6; tl.Parent=tip
-        local b=tl.TextBounds
-        tip.Size=UDim2.new(0,b.X+10,0,19); tl.Size=UDim2.new(0,b.X+10,0,19)
-        return tip
+    local function RegFlag(flag, get, set, ftype, default)
+        if not flag or flag == "" then return end
+        winFlags[flag] = { get=get, set=set, type=ftype, default=default }
     end
 
+    -- ── screen GUIs ───────────────────────────────────────────────
+    local shamanGui  = Instance.new("ScreenGui"); shamanGui.Name  ="ShamanBig";          shamanGui.Parent  = CoreGui
+    local tooltipGui = Instance.new("ScreenGui"); tooltipGui.Name ="ShamanBigTooltips";  tooltipGui.Parent = CoreGui
+
+    -- ── tooltip system ────────────────────────────────────────────
+    local function MakeTooltip(text)
+        local tip=Instance.new("Frame"); tip.AnchorPoint=Vector2.new(.5,0)
+        tip.BackgroundColor3=Color3.fromRGB(60,60,60); tip.Visible=false
+        tip.Size=UDim2.new(0,100,0,20); tip.ZIndex=5; tip.Parent=tooltipGui
+        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,4); c.Parent=tip end
+        do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(90,90,90); s.Parent=tip end
+        local tl=Instance.new("TextLabel"); tl.Font=Enum.Font.Gotham; tl.Text=text
+        tl.TextColor3=Color3.fromRGB(215,215,215); tl.TextSize=11; tl.BackgroundTransparency=1
+        tl.Size=UDim2.new(0,100,0,20); tl.ZIndex=6; tl.Parent=tip
+        local b=tl.TextBounds
+        tip.Size=UDim2.new(0,b.X+12,0,20); tl.Size=UDim2.new(0,b.X+12,0,20)
+        return tip
+    end
     local function AddTooltip(elem, text)
-        local tip = MakeTooltip(text); local hovered = false
+        local tip=MakeTooltip(text); local hov=false
         local function Upd()
             local mp=UserInputService:GetMouseLocation(); local vp=workspace.CurrentCamera.ViewportSize
-            tip.Position=UDim2.new(mp.X/vp.X,0,mp.Y/vp.Y,0)+UDim2.new(0,0,0,-43)
+            tip.Position=UDim2.new(mp.X/vp.X,0,mp.Y/vp.Y,0)+UDim2.new(0,0,0,-46)
         end
-        elem.MouseEnter:Connect(function() hovered=true; task.wait(0.5); if hovered then tip.Visible=true end end)
-        elem.MouseLeave:Connect(function() hovered=false; tip.Visible=false end)
+        elem.MouseEnter:Connect(function() hov=true; task.wait(.35); if hov then tip.Visible=true end end)
+        elem.MouseLeave:Connect(function() hov=false; tip.Visible=false end)
         elem.MouseMoved:Connect(Upd)
     end
 
@@ -167,85 +326,77 @@ function library:Window(Info)
     --  MAIN FRAME  700 × 480
     -- ══════════════════════════════════════════════════════════════
     local main = Instance.new("Frame"); main.Name="Main"
-    main.BackgroundColor3=Color3.fromRGB(27,27,27); main.BorderSizePixel=0
+    main.BackgroundColor3=Color3.fromRGB(22,22,22); main.BorderSizePixel=0
     main.ClipsDescendants=true
-    main.Position=UDim2.new(0.5,-WIN_W/2,0.5,-WIN_H/2)
+    main.Position=UDim2.new(.5,-WIN_W/2,.5,-WIN_H/2)
     main.Size=UDim2.new(0,WIN_W,0,WIN_H); main.Parent=shamanGui
-    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,5); c.Parent=main end
-    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(61,61,61); s.Parent=main end
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,6); c.Parent=main end
+    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(48,48,48); s.Parent=main end
 
     -- ══════════════════════════════════════════════════════════════
     --  TOPBAR  700 × 31
     -- ══════════════════════════════════════════════════════════════
     local topbar = Instance.new("Frame"); topbar.Name="Topbar"
-    topbar.BackgroundColor3=Color3.fromRGB(25,25,25); topbar.ZIndex=2
+    topbar.BackgroundColor3=Color3.fromRGB(18,18,18); topbar.ZIndex=2
     topbar.Size=UDim2.new(0,WIN_W,0,TOPBAR_H); topbar.Parent=main
-    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,5); c.Parent=topbar end
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,6); c.Parent=topbar end
+    -- flush bottom rounded corners of topbar
+    local tbFix=Instance.new("Frame"); tbFix.BackgroundColor3=Color3.fromRGB(18,18,18)
+    tbFix.BorderSizePixel=0; tbFix.Position=UDim2.new(0,0,.5,0); tbFix.Size=UDim2.new(1,0,.5,0); tbFix.ZIndex=2; tbFix.Parent=topbar
+    -- thin separator line at base of topbar
+    local tbLine=Instance.new("Frame"); tbLine.BackgroundColor3=Color3.fromRGB(38,38,38)
+    tbLine.BorderSizePixel=0; tbLine.Position=UDim2.new(0,0,1,-1); tbLine.Size=UDim2.new(1,0,0,1); tbLine.ZIndex=3; tbLine.Parent=topbar
 
-    -- accent separator + gradient line (identical to original)
-    local accBar = Instance.new("Frame"); accBar.Name="Frame"
-    accBar.BackgroundColor3=Color3.fromRGB(24,24,24); accBar.BorderSizePixel=0
-    accBar.Position=UDim2.new(0,0,0.625,0); accBar.Size=UDim2.new(0,WIN_W,0,11); accBar.Parent=topbar
-    local gradLine = Instance.new("Frame"); gradLine.Name="Frame"; gradLine.AnchorPoint=Vector2.new(0.5,1)
-    gradLine.BackgroundColor3=Color3.fromRGB(34,34,34); gradLine.BorderSizePixel=0
-    gradLine.Position=UDim2.new(0.5,0,1,0); gradLine.Size=UDim2.new(0,WIN_W,0,1); gradLine.ZIndex=2; gradLine.Parent=accBar
-    local uiGradientLine = Instance.new("UIGradient"); uiGradientLine.Enabled=false
-    uiGradientLine.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(183,248,219)),ColorSequenceKeypoint.new(1,Color3.fromRGB(80,167,194))})
-    uiGradientLine.Parent=gradLine
+    -- title label
+    local titleLbl=Instance.new("TextLabel"); titleLbl.Font=Enum.Font.GothamBold
+    titleLbl.Text=Info.Text; titleLbl.TextColor3=Color3.fromRGB(230,230,230); titleLbl.TextSize=12
+    titleLbl.TextXAlignment=Enum.TextXAlignment.Left; titleLbl.BackgroundTransparency=1
+    titleLbl.Position=UDim2.new(0.015,0,0,0); titleLbl.Size=UDim2.new(0,200,0,TOPBAR_H); titleLbl.ZIndex=3; titleLbl.Parent=topbar
 
-    -- title
-    local titleLabel = Instance.new("TextLabel"); titleLabel.Font=Enum.Font.GothamBold
-    titleLabel.Text=Info.Text; titleLabel.TextColor3=Color3.fromRGB(255,255,255); titleLabel.TextSize=12
-    titleLabel.TextXAlignment=Enum.TextXAlignment.Left; titleLabel.BackgroundTransparency=1
-    titleLabel.Position=UDim2.new(0.015,0,0,0); titleLabel.Size=UDim2.new(0,200,0,30)
-    titleLabel.ZIndex=2; titleLabel.Parent=topbar
-
-    -- ── dragging ──────────────────────────────────────────────────
-    local dragging, dragInput, dragStart, startPos
-    topbar.InputBegan:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            dragging=true; dragStart=input.Position; startPos=main.Position
-            input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
+    -- ── drag ──────────────────────────────────────────────────────
+    local dragging,dragInput,dragStart,startPos
+    topbar.InputBegan:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+            dragging=true; dragStart=inp.Position; startPos=main.Position
+            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
         end
     end)
-    topbar.InputChanged:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then
-            dragInput=input
-        end
+    topbar.InputChanged:Connect(function(inp)
+        if inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch then dragInput=inp end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input==dragInput and dragging then
-            local d=input.Position-dragStart
+    UserInputService.InputChanged:Connect(function(inp)
+        if inp==dragInput and dragging then
+            local d=inp.Position-dragStart
             main.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
         end
     end)
 
-    -- ── close button ──────────────────────────────────────────────
-    local closeBtn = Instance.new("ImageButton"); closeBtn.Name="CloseButton"
-    closeBtn.Image=getcustomasset("Shaman/Close.png"); closeBtn.ImageColor3=Color3.fromRGB(237,237,237)
-    closeBtn.BackgroundTransparency=1; closeBtn.ZIndex=2
-    closeBtn.AnchorPoint=Vector2.new(1,0.5); closeBtn.Position=UDim2.new(1,-8,0.5,0)
-    closeBtn.Size=UDim2.new(0,17,0,17); closeBtn.Parent=topbar
+    -- ── topbar buttons  (close / minimize / colour-dropper) ───────
+    local function TbBtn(xOff, img, isSvg)
+        local b=Instance.new("ImageButton")
+        b.Image = isSvg and img or getcustomasset(img)
+        b.ImageColor3=Color3.fromRGB(195,195,195); b.BackgroundTransparency=1; b.ZIndex=3
+        b.AnchorPoint=Vector2.new(1,.5); b.Position=UDim2.new(1,-xOff,.5,0)
+        b.Size=UDim2.new(0,16,0,16); b.Parent=topbar; return b
+    end
+    local closeBtn = TbBtn(8,  "Shaman/Close.png",         false)
+    local minBtn   = TbBtn(30, "rbxassetid://10664064072",  true)
+    local editBtn  = TbBtn(52, "Shaman/ColorDropper.png",  false)
+    editBtn.Size   = UDim2.new(0,14,0,14)
+
+    closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(220,75,75)}):Play() end)
+    closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(195,195,195)}):Play() end)
     closeBtn.MouseButton1Click:Once(function() shamanGui:Destroy(); tooltipGui:Destroy() end)
-    closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(217,97,99)}):Play() end)
-    closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(237,237,237)}):Play() end)
 
-    -- ── minimize button ───────────────────────────────────────────
-    local minBtn = Instance.new("ImageButton"); minBtn.Name="MinimizeButton"
-    minBtn.Image="rbxassetid://10664064072"; minBtn.ImageColor3=Color3.fromRGB(237,237,237)
-    minBtn.BackgroundTransparency=1; minBtn.ZIndex=2
-    minBtn.AnchorPoint=Vector2.new(1,0.5); minBtn.Position=UDim2.new(1,-32,0.5,0)
-    minBtn.Size=UDim2.new(0,17,0,17); minBtn.Parent=topbar
-    minBtn.MouseEnter:Connect(function() TweenService:Create(minBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(194,162,76)}):Play() end)
-    minBtn.MouseLeave:Connect(function() TweenService:Create(minBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(237,237,237)}):Play() end)
+    minBtn.MouseEnter:Connect(function() TweenService:Create(minBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(200,165,55)}):Play() end)
+    minBtn.MouseLeave:Connect(function() TweenService:Create(minBtn,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(195,195,195)}):Play() end)
 
-    local Opened = true
+    local Opened=true
     minBtn.MouseButton1Click:Connect(function()
-        Opened = not Opened
-        topbar:FindFirstChild("Frame").Visible = Opened
+        Opened=not Opened
         task.spawn(function()
-            if Opened then task.wait(0.15) end
-            for _, v in pairs(main:GetChildren()) do
+            if Opened then task.wait(.15) end
+            for _,v in pairs(main:GetChildren()) do
                 if v.Name=="TabContainer" then v.Visible=Opened end
                 if (v.Name=="LeftContainer" or v.Name=="RightContainer") and v.Visible then
                     v.Size = Opened and UDim2.new(0,COL_W,0,CON_H-4) or UDim2.new(0,COL_W,0,0)
@@ -257,503 +408,444 @@ function library:Window(Info)
         }):Play()
     end)
 
-    -- ── edit/color-dropper button ─────────────────────────────────
-    local editBtn = Instance.new("ImageButton"); editBtn.Name="EditButton"
-    editBtn.Image=getcustomasset("Shaman/ColorDropper.png"); editBtn.ImageColor3=Color3.fromRGB(237,237,237)
-    editBtn.BackgroundTransparency=1; editBtn.ZIndex=2
-    editBtn.AnchorPoint=Vector2.new(1,0.5); editBtn.Position=UDim2.new(1,-55,0.5,0)
-    editBtn.Size=UDim2.new(0,15,0,15); editBtn.Parent=topbar
-
-    local editGrad = Instance.new("UIGradient"); editGrad.Enabled=false
-    editGrad.Color=ColorSequence.new{
-        ColorSequenceKeypoint.new(0,   Color3.fromRGB(255,0,0)),
-        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255,255,0)),
-        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(0,255,0)),
-        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0,255,255)),
-        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0,0,255)),
-        ColorSequenceKeypoint.new(1,   Color3.fromRGB(255,0,255)),
-    }; editGrad.Parent=editBtn
+    -- colour-dropper (rainbow gradient on icon)
+    local editGrad=Instance.new("UIGradient"); editGrad.Enabled=false
+    editGrad.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),ColorSequenceKeypoint.new(.2,Color3.fromRGB(255,255,0)),ColorSequenceKeypoint.new(.4,Color3.fromRGB(0,255,0)),ColorSequenceKeypoint.new(.6,Color3.fromRGB(0,255,255)),ColorSequenceKeypoint.new(.8,Color3.fromRGB(0,0,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,255))}
+    editGrad.Parent=editBtn
     task.spawn(function()
         while task.wait() do
             if editGrad.Enabled then
-                local loop=tick()%2/2; local colors={}
-                for i=1,8 do
-                    local h=loop-((i-1)/7)
-                    if h<0 then h=h+1 end
-                    colors[#colors+1]=ColorSequenceKeypoint.new((i-1)/7,Color3.fromHSV(h,1,1))
-                end
-                editGrad.Color=ColorSequence.new(colors)
+                local loop=tick()%2/2; local ks={}
+                for i=1,8 do local h=loop-((i-1)/7); if h<0 then h=h+1 end; ks[#ks+1]=ColorSequenceKeypoint.new((i-1)/7,Color3.fromHSV(h,1,1)) end
+                editGrad.Color=ColorSequence.new(ks)
             end
         end
     end)
     editBtn.MouseEnter:Connect(function() if not EditOpened then editGrad.Enabled=true end end)
     editBtn.MouseLeave:Connect(function() if not EditOpened then editGrad.Enabled=false end end)
     editBtn.MouseButton1Click:Connect(function()
-        EditOpened = not EditOpened
-        editGrad.Enabled = EditOpened
+        EditOpened=not EditOpened; editGrad.Enabled=EditOpened
         if not EditOpened then
-            for frame, v in pairs(ColorElements) do
+            for obj,v in pairs(ColorElements) do
                 if v.Enabled then
-                    local prop = frame.ClassName=="Frame" and "BackgroundColor3" or "ImageColor3"
-                    TweenService:Create(frame,TweenInfo.new(.15),{[prop]=Color3.fromRGB(48,207,106)}):Play()
+                    local prop=obj.ClassName=="Frame" and "BackgroundColor3" or "ImageColor3"
+                    TweenService:Create(obj,TweenInfo.new(.15),{[prop]=AC}):Play()
                 end
             end
         else
-            for _, v in pairs(ColorElements) do
-                if v.Type~="Toggle" then v.Enabled=true end
-            end
+            for _,v in pairs(ColorElements) do if v.Type~="Toggle" then v.Enabled=true end end
         end
     end)
 
     -- ══════════════════════════════════════════════════════════════
-    --  SIDEBAR  150 × (WIN_H - TOPBAR_H)
+    --  SIDEBAR
     -- ══════════════════════════════════════════════════════════════
-    local tabContainer = Instance.new("Frame"); tabContainer.Name="TabContainer"
-    tabContainer.BackgroundColor3=Color3.fromRGB(30,30,30)
+    local tabContainer=Instance.new("Frame"); tabContainer.Name="TabContainer"
+    tabContainer.BackgroundColor3=Color3.fromRGB(26,26,26)
     tabContainer.Position=UDim2.new(0,0,COL_Y_OFF,0)
     tabContainer.Size=UDim2.new(0,SIDEBAR_W,0,CON_H); tabContainer.Parent=main
-    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,5); c.Parent=tabContainer end
-    -- fix rounded corners (flush right side)
-    local sideFix1=Instance.new("Frame"); sideFix1.Name="Fix"; sideFix1.BackgroundColor3=Color3.fromRGB(30,30,30)
-    sideFix1.BorderSizePixel=0; sideFix1.Position=UDim2.new(0.9,0,0,0); sideFix1.Size=UDim2.new(0,14,0,CON_H); sideFix1.Parent=tabContainer
-    local sideFix2=Instance.new("Frame"); sideFix2.Name="Fix"; sideFix2.BackgroundColor3=Color3.fromRGB(30,30,30)
-    sideFix2.BorderSizePixel=0; sideFix2.Position=UDim2.new(0,0,0,0); sideFix2.Size=UDim2.new(0,14,0,80); sideFix2.Parent=tabContainer
+    do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,6); c.Parent=tabContainer end
+    -- flush right-side of sidebar corners
+    local sf1=Instance.new("Frame"); sf1.BackgroundColor3=Color3.fromRGB(26,26,26)
+    sf1.BorderSizePixel=0; sf1.Position=UDim2.new(.87,0,0,0); sf1.Size=UDim2.new(0,14,0,CON_H); sf1.Parent=tabContainer
+    local sf2=Instance.new("Frame"); sf2.BackgroundColor3=Color3.fromRGB(26,26,26)
+    sf2.BorderSizePixel=0; sf2.Position=UDim2.new(0,0,0,0); sf2.Size=UDim2.new(0,14,0,70); sf2.Parent=tabContainer
+    -- separator line
+    local sideLine=Instance.new("Frame"); sideLine.AnchorPoint=Vector2.new(1,.5)
+    sideLine.BackgroundColor3=Color3.fromRGB(38,38,38); sideLine.BorderSizePixel=0
+    sideLine.Position=UDim2.new(1,0,.5,0); sideLine.Size=UDim2.new(0,1,0,CON_H-8); sideLine.Parent=tabContainer
 
-    -- vertical separator line
-    local sepLine=Instance.new("Frame"); sepLine.Name="SepLine"; sepLine.AnchorPoint=Vector2.new(1,0.5)
-    sepLine.BackgroundColor3=Color3.fromRGB(34,34,34); sepLine.BorderSizePixel=0
-    sepLine.Position=UDim2.new(1,0,0.5,0); sepLine.Size=UDim2.new(0,1,0,CON_H-4); sepLine.Parent=tabContainer
-
-    -- scrolling tab list
-    local scrollingContainer = Instance.new("ScrollingFrame"); scrollingContainer.Name="ScrollingContainer"
-    scrollingContainer.AutomaticCanvasSize=Enum.AutomaticSize.Y; scrollingContainer.CanvasSize=UDim2.new()
-    scrollingContainer.ScrollBarImageColor3=Color3.fromRGB(56,56,56); scrollingContainer.ScrollBarThickness=2
-    scrollingContainer.Active=true; scrollingContainer.BackgroundTransparency=1; scrollingContainer.BorderSizePixel=0
-    scrollingContainer.Size=UDim2.new(0,SIDEBAR_W,0,CON_H); scrollingContainer.ZIndex=2; scrollingContainer.Parent=tabContainer
-    do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=scrollingContainer end
-    do local p=Instance.new("UIPadding"); p.Parent=scrollingContainer end
+    local scrollContainer=Instance.new("ScrollingFrame"); scrollContainer.Name="ScrollingContainer"
+    scrollContainer.AutomaticCanvasSize=Enum.AutomaticSize.Y; scrollContainer.CanvasSize=UDim2.new()
+    scrollContainer.ScrollBarImageColor3=Color3.fromRGB(55,55,55); scrollContainer.ScrollBarThickness=2
+    scrollContainer.Active=true; scrollContainer.BackgroundTransparency=1; scrollContainer.BorderSizePixel=0
+    scrollContainer.Size=UDim2.new(0,SIDEBAR_W,0,CON_H); scrollContainer.ZIndex=2; scrollContainer.Parent=tabContainer
+    do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=scrollContainer end
+    do local p=Instance.new("UIPadding"); p.PaddingTop=UDim.new(0,5); p.Parent=scrollContainer end
 
     -- ══════════════════════════════════════════════════════════════
-    --  TAB FUNCTION
+    --  TAB BUILDER
     -- ══════════════════════════════════════════════════════════════
     function window:Tab(Info)
+        Info      = Info or {}
         Info.Text = Info.Text or "Tab"
+        Info.Icon = Info.Icon or nil   -- optional rbxassetid string e.g. "rbxassetid://123"
+
         local tab = {}
 
-        -- tab button row
-        local tabButton = Instance.new("Frame"); tabButton.Name="TabButton"
-        tabButton.BackgroundTransparency=1; tabButton.Size=UDim2.new(0,SIDEBAR_W-1,0,27); tabButton.Parent=scrollingContainer
+        -- sidebar row
+        local tabRow=Instance.new("Frame"); tabRow.Name="TabButton"
+        tabRow.BackgroundTransparency=1; tabRow.Size=UDim2.new(0,SIDEBAR_W-1,0,30); tabRow.Parent=scrollContainer
 
-        local tabFrame = Instance.new("Frame"); tabFrame.Name="TabFrame"
-        tabFrame.BackgroundColor3=Color3.fromRGB(255,255,255); tabFrame.BackgroundTransparency=0.96
-        tabFrame.BorderSizePixel=0; tabFrame.Position=UDim2.new(0.05,-4,0.013,3)
-        tabFrame.Size=UDim2.new(0,SIDEBAR_W-14,0,23); tabFrame.ZIndex=2; tabFrame.Parent=tabButton
-        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=tabFrame end
-        do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(68,68,68); s.Transparency=0.45; s.Parent=tabFrame end
+        -- highlight frame
+        local tabFrame=Instance.new("Frame"); tabFrame.Name="TabFrame"
+        tabFrame.BackgroundColor3=Color3.fromRGB(255,255,255); tabFrame.BackgroundTransparency=0.97
+        tabFrame.BorderSizePixel=0; tabFrame.Position=UDim2.new(0,5,0,3)
+        tabFrame.Size=UDim2.new(0,SIDEBAR_W-12,0,24); tabFrame.ZIndex=2; tabFrame.Parent=tabRow
+        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,4); c.Parent=tabFrame end
+        do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(55,55,55); s.Transparency=.5; s.Parent=tabFrame end
 
-        tabFrame.MouseEnter:Connect(function()
-            if TabSelected~=tabFrame then TweenService:Create(tabFrame,TweenInfo.new(.15),{BackgroundTransparency=.93}):Play() end
-        end)
-        tabFrame.MouseLeave:Connect(function()
-            if TabSelected~=tabFrame then TweenService:Create(tabFrame,TweenInfo.new(.15),{BackgroundTransparency=.96}):Play() end
-        end)
+        -- left accent bar (shown when this tab is selected)
+        local acBar=Instance.new("Frame"); acBar.Name="AccentBar"; acBar.BackgroundColor3=AC
+        acBar.BorderSizePixel=0; acBar.Position=UDim2.new(0,0,.1,0); acBar.Size=UDim2.new(0,2,.8,0)
+        acBar.BackgroundTransparency=1; acBar.ZIndex=4; acBar.Parent=tabFrame
+        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,2); c.Parent=acBar end
 
-        local tabBtn = Instance.new("TextButton"); tabBtn.Name="TabTextButton"; tabBtn.Text=""
-        tabBtn.BackgroundTransparency=1; tabBtn.Size=UDim2.new(0,SIDEBAR_W-14,0,23); tabBtn.Parent=tabFrame
-
-        local tabLbl = Instance.new("TextLabel"); tabLbl.Name="TextLabel"
-        tabLbl.Font=Enum.Font.GothamBold; tabLbl.Text=Info.Text; tabLbl.TextSize=11
-        tabLbl.TextColor3=Color3.fromRGB(237,237,237); tabLbl.BackgroundTransparency=1
-        tabLbl.Size=UDim2.new(0,SIDEBAR_W-12,0,23); tabLbl.ZIndex=2; tabLbl.Parent=tabFrame
-
-        -- selected glow overlay
-        local selGlow = Instance.new("Frame"); selGlow.Name="Selected"
-        selGlow.BackgroundColor3=Color3.fromRGB(255,255,255); selGlow.BackgroundTransparency=0.1
-        selGlow.Visible=false; selGlow.BorderSizePixel=0
-        selGlow.Size=UDim2.new(0,SIDEBAR_W-12,0,23); selGlow.Parent=tabButton
-        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=selGlow end
-        do
-            local g=Instance.new("UIGradient"); g.Parent=selGlow
-            g.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(183,248,219)),ColorSequenceKeypoint.new(1,Color3.fromRGB(25,25,25))})
-            g.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0.5),NumberSequenceKeypoint.new(0.688,0.725),NumberSequenceKeypoint.new(1,0.506)})
+        -- ── icon  (NEW) ───────────────────────────────────────────
+        local iconImg = nil
+        if Info.Icon then
+            iconImg=Instance.new("ImageLabel"); iconImg.Name="TabIcon"
+            iconImg.BackgroundTransparency=1; iconImg.Image=Info.Icon
+            iconImg.ImageColor3=Color3.fromRGB(145,145,145)
+            iconImg.AnchorPoint=Vector2.new(0,.5); iconImg.ScaleType=Enum.ScaleType.Fit
+            iconImg.Position=UDim2.new(0,8,.5,0); iconImg.Size=UDim2.new(0,14,0,14)
+            iconImg.ZIndex=3; iconImg.Parent=tabFrame
         end
 
-        -- ── left + right content columns ─────────────────────────
-        -- Left column position: right of sidebar
-        local leftColX  = SIDEBAR_W / WIN_W         -- ~0.214
-        -- Right column position: left col + width + small gap
-        local rightColX = (SIDEBAR_W + COL_W + 6) / WIN_W  -- ~0.530
+        -- tab label (shifts right when icon present)
+        local tabLbl=Instance.new("TextLabel"); tabLbl.Name="TextLabel"
+        tabLbl.Font=Enum.Font.GothamBold; tabLbl.Text=Info.Text; tabLbl.TextSize=11
+        tabLbl.TextColor3=Color3.fromRGB(140,140,140); tabLbl.BackgroundTransparency=1
+        tabLbl.TextXAlignment=Enum.TextXAlignment.Left
+        tabLbl.Position=UDim2.new(0, Info.Icon and 27 or 10, 0, 0)
+        tabLbl.Size=UDim2.new(1, Info.Icon and -32 or -14, 1, 0)
+        tabLbl.ZIndex=3; tabLbl.Parent=tabFrame
 
-        local leftContainer = Instance.new("ScrollingFrame"); leftContainer.Name="LeftContainer"
+        -- invisible click region
+        local tabBtn=Instance.new("TextButton"); tabBtn.Text=""
+        tabBtn.BackgroundTransparency=1; tabBtn.Size=UDim2.new(1,0,1,0); tabBtn.ZIndex=4; tabBtn.Parent=tabFrame
+
+        -- hover fx
+        tabFrame.MouseEnter:Connect(function()
+            if TabSelected~=tabFrame then TweenService:Create(tabFrame,TweenInfo.new(.1),{BackgroundTransparency=.93}):Play() end
+        end)
+        tabFrame.MouseLeave:Connect(function()
+            if TabSelected~=tabFrame then TweenService:Create(tabFrame,TweenInfo.new(.1),{BackgroundTransparency=.97}):Play() end
+        end)
+
+        -- content column positions
+        local leftColX  = SIDEBAR_W / WIN_W
+        local rightColX = (SIDEBAR_W + COL_W + 6) / WIN_W
+
+        local leftContainer=Instance.new("ScrollingFrame"); leftContainer.Name="LeftContainer"
         leftContainer.AutomaticCanvasSize=Enum.AutomaticSize.Y; leftContainer.CanvasSize=UDim2.new()
-        leftContainer.ScrollBarThickness=0; leftContainer.BackgroundColor3=Color3.fromRGB(26,26,26)
+        leftContainer.ScrollBarThickness=0; leftContainer.BackgroundColor3=Color3.fromRGB(24,24,24)
         leftContainer.BorderSizePixel=0; leftContainer.Selectable=false; leftContainer.Visible=false
         leftContainer.Position=UDim2.new(leftColX,0,COL_Y_OFF,0); leftContainer.Size=UDim2.new(0,COL_W,0,CON_H-4)
         leftContainer.Parent=main
         do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=leftContainer end
-        do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,4); p.PaddingTop=UDim.new(0,3); p.Parent=leftContainer end
+        do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,4); p.PaddingTop=UDim.new(0,4); p.Parent=leftContainer end
 
-        local rightContainer = Instance.new("ScrollingFrame"); rightContainer.Name="RightContainer"
+        local rightContainer=Instance.new("ScrollingFrame"); rightContainer.Name="RightContainer"
         rightContainer.AutomaticCanvasSize=Enum.AutomaticSize.Y; rightContainer.CanvasSize=UDim2.new()
-        rightContainer.ScrollBarThickness=0; rightContainer.BackgroundColor3=Color3.fromRGB(26,26,26)
+        rightContainer.ScrollBarThickness=0; rightContainer.BackgroundColor3=Color3.fromRGB(24,24,24)
         rightContainer.BorderSizePixel=0; rightContainer.Selectable=false; rightContainer.Visible=false
         rightContainer.Position=UDim2.new(rightColX,0,COL_Y_OFF,0); rightContainer.Size=UDim2.new(0,COL_W,0,CON_H-4)
         rightContainer.Parent=main
-        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=rightContainer end
+        do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,4); c.Parent=rightContainer end
         do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=rightContainer end
-        do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,2); p.PaddingTop=UDim.new(0,3); p.Parent=rightContainer end
+        do local p=Instance.new("UIPadding"); p.PaddingLeft=UDim.new(0,2); p.PaddingTop=UDim.new(0,4); p.Parent=rightContainer end
 
         -- ── tab select logic ──────────────────────────────────────
         local function SelectTab()
             TabSelected = tabFrame
+            -- hide all other containers
             task.spawn(function()
-                for _, v in pairs(main:GetChildren()) do
+                for _,v in pairs(main:GetChildren()) do
                     if v.Name=="LeftContainer" or v.Name=="RightContainer" then v.Visible=false end
                 end
             end)
-            for _, v in pairs(scrollingContainer:GetChildren()) do
-                if v~=tabButton and v.Name=="TabButton" then
-                    TweenService:Create(v.TabFrame,TweenInfo.new(.15),{BackgroundTransparency=.96}):Play()
+            -- deselect all other tabs
+            for _,v in pairs(scrollContainer:GetChildren()) do
+                if v.Name=="TabButton" and v~=tabRow then
+                    local tf = v:FindFirstChild("TabFrame"); if not tf then continue end
+                    TweenService:Create(tf,TweenInfo.new(.1),{BackgroundTransparency=.97}):Play()
+                    local tl=tf:FindFirstChildOfClass("TextLabel"); if tl then TweenService:Create(tl,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(140,140,140)}):Play() end
+                    local ab=tf:FindFirstChild("AccentBar"); if ab then TweenService:Create(ab,TweenInfo.new(.1),{BackgroundTransparency=1}):Play() end
+                    local ti=tf:FindFirstChild("TabIcon"); if ti then TweenService:Create(ti,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(145,145,145)}):Play() end
                 end
             end
-            TweenService:Create(tabFrame,TweenInfo.new(.15),{BackgroundTransparency=.85}):Play()
+            -- select this tab
+            TweenService:Create(tabFrame,TweenInfo.new(.1),{BackgroundTransparency=.88}):Play()
+            TweenService:Create(tabLbl,  TweenInfo.new(.1),{TextColor3=Color3.fromRGB(230,230,230)}):Play()
+            TweenService:Create(acBar,   TweenInfo.new(.14),{BackgroundTransparency=0}):Play()
+            if iconImg then TweenService:Create(iconImg,TweenInfo.new(.1),{ImageColor3=AC}):Play() end
             leftContainer.Visible  = true
             rightContainer.Visible = true
         end
+
         tabBtn.MouseButton1Click:Connect(SelectTab)
         function tab:Select() SelectTab() end
 
         -- ══════════════════════════════════════════════════════════
         --  SECTION
+        --  NEW: Info.Open (boolean, default true)
+        --       true  → auto-expanded  when the tab loads
+        --       false → starts collapsed, user must click to open
         -- ══════════════════════════════════════════════════════════
         function tab:Section(Info)
+            Info      = Info or {}
             Info.Text = Info.Text or "Section"
             Info.Side = Info.Side or "Left"
+            -- default open = true; only collapses if explicitly passed Open=false
+            local startOpen = (Info.Open ~= false)
 
             local SizeY      = 23
             local sectiontable = {}
-            local Side       = (Info.Side == "Left") and leftContainer or rightContainer
+            local Side       = (Info.Side=="Left") and leftContainer or rightContainer
 
-            local section = Instance.new("Frame"); section.Name="Section"
+            local section=Instance.new("Frame"); section.Name="Section"
             section.BackgroundTransparency=1; section.Size=UDim2.new(0,ELEM_W+8,0,27); section.Parent=Side
-            do local cv=Instance.new("BoolValue",section); cv.Value=false end
-            local Closed = section:FindFirstChildOfClass("BoolValue")
+            local Closed=Instance.new("BoolValue",section); Closed.Value=false
 
-            local sectionFrame = Instance.new("Frame"); sectionFrame.Name="SectionFrame"
-            sectionFrame.BackgroundColor3=Color3.fromRGB(42,42,42); sectionFrame.ClipsDescendants=true
+            local sectionFrame=Instance.new("Frame"); sectionFrame.Name="SectionFrame"
+            sectionFrame.BackgroundColor3=Color3.fromRGB(30,30,30); sectionFrame.ClipsDescendants=true
             sectionFrame.Size=UDim2.new(0,ELEM_W+8,0,23); sectionFrame.Parent=section
-            do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(52,52,52); s.Parent=sectionFrame end
-            do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=sectionFrame end
+            do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(44,44,44); s.Parent=sectionFrame end
+            do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,4); c.Parent=sectionFrame end
             do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=sectionFrame end
             do local p=Instance.new("UIPadding"); p.PaddingTop=UDim.new(0,23); p.Parent=sectionFrame end
 
-            -- auto-track height
             sectionFrame.ChildAdded:Connect(function(v)
-                if v.ClassName=="Frame" then
-                    SizeY = SizeY + (v.Name=="Slider" and 40 or 27)
-                end
+                if v.ClassName=="Frame" then SizeY=SizeY+(v.Name=="Slider" and 40 or 27) end
             end)
 
-            local sectionName = Instance.new("TextLabel"); sectionName.Name="SectionName"
-            sectionName.Font=Enum.Font.GothamBold; sectionName.Text=Info.Text
-            sectionName.TextColor3=Color3.fromRGB(217,217,217); sectionName.TextSize=11
+            local sectionName=Instance.new("TextLabel"); sectionName.Font=Enum.Font.GothamBold
+            sectionName.Text=Info.Text; sectionName.TextColor3=Color3.fromRGB(195,195,195); sectionName.TextSize=11
             sectionName.TextXAlignment=Enum.TextXAlignment.Left; sectionName.BackgroundTransparency=1
-            sectionName.Position=UDim2.new(0.04,0,0,0); sectionName.Size=UDim2.new(0,ELEM_W-20,0,23); sectionName.Parent=section
+            sectionName.Position=UDim2.new(0.04,0,0,0); sectionName.Size=UDim2.new(0,ELEM_W-22,0,23); sectionName.Parent=section
 
-            local sectionBtn = Instance.new("TextButton"); sectionBtn.Text=""
-            sectionBtn.BackgroundTransparency=1; sectionBtn.Size=UDim2.new(0,ELEM_W+8,0,23)
-            sectionBtn.ZIndex=2; sectionBtn.Parent=section
+            local sectionBtn=Instance.new("TextButton"); sectionBtn.Text=""
+            sectionBtn.BackgroundTransparency=1; sectionBtn.Size=UDim2.new(0,ELEM_W+8,0,23); sectionBtn.ZIndex=2; sectionBtn.Parent=section
 
-            local sectionIcon = Instance.new("ImageButton"); sectionIcon.Name="SectionButton"
-            sectionIcon.Image="rbxassetid://10664195729"; sectionIcon.ImageColor3=Color3.fromRGB(217,217,217)
-            sectionIcon.AnchorPoint=Vector2.new(1,0); sectionIcon.BackgroundTransparency=1
-            sectionIcon.Position=UDim2.new(1,-5,0,5); sectionIcon.Size=UDim2.new(0,13,0,13); sectionIcon.ZIndex=1; sectionIcon.Parent=section
+            local sectionIcon=Instance.new("ImageButton"); sectionIcon.Image="rbxassetid://10664195729"
+            sectionIcon.ImageColor3=Color3.fromRGB(155,155,155); sectionIcon.AnchorPoint=Vector2.new(1,0)
+            sectionIcon.BackgroundTransparency=1; sectionIcon.Position=UDim2.new(1,-5,0,5)
+            sectionIcon.Size=UDim2.new(0,13,0,13); sectionIcon.ZIndex=1; sectionIcon.Parent=section
 
-            sectionBtn.MouseButton1Click:Connect(function()
-                Closed.Value = not Closed.Value
-                TweenService:Create(section,     TweenInfo.new(.1),{Size=UDim2.new(0,ELEM_W+8,0,Closed.Value and SizeY+4  or 27)}):Play()
-                TweenService:Create(sectionFrame,TweenInfo.new(.1),{Size=UDim2.new(0,ELEM_W+8,0,Closed.Value and SizeY    or 23)}):Play()
-                TweenService:Create(sectionIcon, TweenInfo.new(.1),{ImageColor3=Closed.Value and Color3.fromRGB(217,97,99) or Color3.fromRGB(217,217,217)}):Play()
-                TweenService:Create(sectionIcon, TweenInfo.new(.1),{Rotation=Closed.Value and 45 or 0}):Play()
-            end)
+            local function ApplyOpen(open, instant)
+                local dur = instant and 0 or .12
+                Closed.Value = open
+                TweenService:Create(section,TweenInfo.new(dur),{Size=UDim2.new(0,ELEM_W+8,0,open and SizeY+4 or 27)}):Play()
+                TweenService:Create(sectionFrame,TweenInfo.new(dur),{Size=UDim2.new(0,ELEM_W+8,0,open and SizeY or 23)}):Play()
+                TweenService:Create(sectionIcon,TweenInfo.new(dur),{ImageColor3=open and Color3.fromRGB(220,80,80) or Color3.fromRGB(155,155,155), Rotation=open and 45 or 0}):Play()
+            end
+
+            sectionBtn.MouseButton1Click:Connect(function() ApplyOpen(not Closed.Value) end)
+
+            -- apply initial open state after ChildAdded has run for all children
+            if startOpen then
+                task.defer(function() ApplyOpen(true, true) end)
+            end
+            -- if Open=false the section stays at SizeY=23 (collapsed)
 
             -- ── LABEL ─────────────────────────────────────────────
             function sectiontable:Label(Info)
-                Info.Text    = Info.Text    or "Label"
-                Info.Color   = Info.Color   or Color3.fromRGB(217,217,217)
-                Info.Tooltip = Info.Tooltip or ""
-                local insidelabel = {}
-                local row=Instance.new("Frame"); row.Name="Label"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Text=Info.Text or "Label"; Info.Color=Info.Color or Color3.fromRGB(195,195,195); Info.Tooltip=Info.Tooltip or ""
+                local insidelabel={}
+                local row=Instance.new("Frame"); row.Name="Label"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text
-                lbl.TextColor3=Info.Color; lbl.TextSize=11; lbl.TextXAlignment=Enum.TextXAlignment.Left
-                lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0.04,0,0,0)
-                lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
+                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text; lbl.TextColor3=Info.Color; lbl.TextSize=11; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
                 function insidelabel:Set(SI) lbl.Text=SI.Text or lbl.Text; lbl.TextColor3=SI.Color or lbl.TextColor3 end
                 return insidelabel
             end
 
             -- ── KEYBIND ───────────────────────────────────────────
             function sectiontable:Keybind(Info)
-                Info.Text     = Info.Text     or "Keybind"
-                Info.Default  = Info.Default  or Enum.KeyCode.F4
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
-                local PressKey = Info.Default
-                local row=Instance.new("Frame"); row.Name="Keybind"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Text=Info.Text or "Keybind"; Info.Default=Info.Default or Enum.KeyCode.F4; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""; Info.Flag=Info.Flag or nil
+                local PressKey=Info.Default; if Info.Flag then library.Flags[Info.Flag]=PressKey end
+                local row=Instance.new("Frame"); row.Name="Keybind"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text
-                lbl.TextColor3=Color3.fromRGB(217,217,217); lbl.TextSize=11
-                lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1
-                lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
-                local kbFrame=Instance.new("Frame"); kbFrame.Name="KeybindFrame"
-                kbFrame.BackgroundColor3=Color3.fromRGB(68,68,68); kbFrame.AnchorPoint=Vector2.new(1,0)
-                kbFrame.BorderSizePixel=0; kbFrame.Position=UDim2.new(0,ELEM_W+6,0.222,0)
-                kbFrame.Size=UDim2.new(0,30,0,15); kbFrame.Parent=row
+                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text; lbl.TextColor3=Color3.fromRGB(195,195,195); lbl.TextSize=11; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
+                local kbFrame=Instance.new("Frame"); kbFrame.BackgroundColor3=Color3.fromRGB(40,40,40); kbFrame.AnchorPoint=Vector2.new(1,0); kbFrame.BorderSizePixel=0; kbFrame.Position=UDim2.new(0,ELEM_W+6,.222,0); kbFrame.Size=UDim2.new(0,30,0,15); kbFrame.Parent=row
                 do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=kbFrame end
-                do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(84,84,84); s.Parent=kbFrame end
-                local kbText=Instance.new("TextLabel"); kbText.Font=Enum.Font.GothamBold
-                kbText.Text=PressKey.Name; kbText.TextColor3=Color3.fromRGB(217,217,217); kbText.TextSize=11
-                kbText.BackgroundTransparency=1; kbText.Size=UDim2.new(1,0,0,15); kbText.Parent=kbFrame
-                local kbBtn=Instance.new("TextButton"); kbBtn.Text=""; kbBtn.BackgroundTransparency=1
-                kbBtn.Size=UDim2.new(1,0,0,15); kbBtn.Parent=kbFrame
+                do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(62,62,62); s.Parent=kbFrame end
+                local kbText=Instance.new("TextLabel"); kbText.Font=Enum.Font.GothamBold; kbText.Text=PressKey.Name; kbText.TextColor3=Color3.fromRGB(195,195,195); kbText.TextSize=10; kbText.BackgroundTransparency=1; kbText.Size=UDim2.new(1,0,0,15); kbText.Parent=kbFrame
+                local kbBtn=Instance.new("TextButton"); kbBtn.Text=""; kbBtn.BackgroundTransparency=1; kbBtn.Size=UDim2.new(1,0,0,15); kbBtn.Parent=kbFrame
                 local b=kbText.TextBounds; kbFrame.Size=UDim2.new(0,b.X+10,0,15)
                 kbText:GetPropertyChangedSignal("Text"):Connect(function() local b2=kbText.TextBounds; kbFrame.Size=UDim2.new(0,b2.X+10,0,15) end)
                 local kbConn; local changing=false
                 kbBtn.MouseButton1Click:Connect(function()
-                    if kbConn then kbConn:Disconnect() end
-                    changing=true; kbText.Text="..."
+                    if kbConn then kbConn:Disconnect() end; changing=true; kbText.Text="..."
                     kbConn=UserInputService.InputBegan:Connect(function(Key,gp)
                         if not table.find(Blacklist,Key.KeyCode) and not gp then
                             kbConn:Disconnect(); kbText.Text=Key.KeyCode.Name; PressKey=Key.KeyCode
+                            if Info.Flag then library.Flags[Info.Flag]=PressKey end
                             task.wait(.1); changing=false
                         end
                     end)
                 end)
-                UserInputService.InputBegan:Connect(function(Key,gp)
-                    if not changing and Key.KeyCode==PressKey and not gp then task.spawn(function() pcall(Info.Callback) end) end
-                end)
+                UserInputService.InputBegan:Connect(function(Key,gp) if not changing and Key.KeyCode==PressKey and not gp then task.spawn(function() pcall(Info.Callback) end) end end)
+                local api={GetKey=function() return PressKey end}
+                RegFlag(Info.Flag,function() return PressKey end,function(v) PressKey=v; kbText.Text=v and (tostring(v):match("%.(%w+)$") or "Unknown") or "NONE"; if Info.Flag then library.Flags[Info.Flag]=v end end,"keycode",Info.Default)
+                return api
             end
 
             -- ── BUTTON ────────────────────────────────────────────
             function sectiontable:Button(Info)
-                Info.Text     = Info.Text     or "Button"
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
-                local row=Instance.new("Frame"); row.Name="Button"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Text=Info.Text or "Button"; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""
+                local row=Instance.new("Frame"); row.Name="Button"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text
-                lbl.TextColor3=Color3.fromRGB(217,217,217); lbl.TextSize=11
-                lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1
-                lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
-                local btn=Instance.new("TextButton"); btn.Text=""; btn.BackgroundTransparency=1
-                btn.Size=UDim2.new(0,ELEM_W+8,0,27); btn.Parent=row
+                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text; lbl.TextColor3=Color3.fromRGB(195,195,195); lbl.TextSize=11; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
+                local btn=Instance.new("TextButton"); btn.Text=""; btn.BackgroundTransparency=1; btn.Size=UDim2.new(0,ELEM_W+8,0,27); btn.Parent=row
+                btn.MouseEnter:Connect(function() TweenService:Create(lbl,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(235,235,235)}):Play() end)
+                btn.MouseLeave:Connect(function() TweenService:Create(lbl,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(195,195,195)}):Play() end)
                 btn.MouseButton1Click:Connect(function() task.spawn(function() pcall(Info.Callback) end) end)
             end
 
             -- ── INPUT ─────────────────────────────────────────────
             function sectiontable:Input(Info)
-                Info.Placeholder = Info.Placeholder or "Input"
-                Info.Flag        = Info.Flag        or nil
-                Info.Callback    = Info.Callback    or function() end
-                Info.Tooltip     = Info.Tooltip     or ""
-                local row=Instance.new("Frame"); row.Name="Input"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Placeholder=Info.Placeholder or "Input"; Info.Flag=Info.Flag or nil; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""
+                local row=Instance.new("Frame"); row.Name="Input"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local outer=Instance.new("Frame"); outer.Name="InputOuter"; outer.AnchorPoint=Vector2.new(0.5,0.5)
-                outer.BackgroundColor3=Color3.fromRGB(68,68,68); outer.BorderSizePixel=0
-                outer.ClipsDescendants=true; outer.Position=UDim2.new(0.5,0,0.5,0)
-                outer.Size=UDim2.new(0,ELEM_W,0,21); outer.Parent=row
-                do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,3); c.Parent=outer end
-                do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(84,84,84); s.Parent=outer end
-                local tb=Instance.new("TextBox"); tb.CursorPosition=-1; tb.Font=Enum.Font.GothamBold
-                tb.PlaceholderColor3=Color3.fromRGB(217,217,217); tb.PlaceholderText=Info.Placeholder
-                tb.Text=""; tb.TextColor3=Color3.fromRGB(237,237,237); tb.TextSize=11
-                tb.TextXAlignment=Enum.TextXAlignment.Left; tb.BackgroundTransparency=1
-                tb.Position=UDim2.new(0.025,0,0,0); tb.Size=UDim2.new(0,ELEM_W-8,0,21); tb.Parent=outer
+                local outer=Instance.new("Frame"); outer.BackgroundColor3=Color3.fromRGB(40,40,40); outer.AnchorPoint=Vector2.new(.5,.5); outer.BorderSizePixel=0; outer.ClipsDescendants=true; outer.Position=UDim2.new(.5,0,.5,0); outer.Size=UDim2.new(0,ELEM_W,0,21); outer.Parent=row
+                do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,4); c.Parent=outer end
+                do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(62,62,62); s.Parent=outer end
+                local tb=Instance.new("TextBox"); tb.CursorPosition=-1; tb.Font=Enum.Font.GothamBold; tb.PlaceholderColor3=Color3.fromRGB(110,110,110); tb.PlaceholderText=Info.Placeholder; tb.Text=""; tb.TextColor3=Color3.fromRGB(218,218,218); tb.TextSize=11; tb.TextXAlignment=Enum.TextXAlignment.Left; tb.BackgroundTransparency=1; tb.Position=UDim2.new(.025,0,0,0); tb.Size=UDim2.new(0,ELEM_W-8,0,21); tb.Parent=outer
                 tb.FocusLost:Connect(function()
                     task.spawn(function()
                         pcall(Info.Callback,tb.Text)
                         if Info.Flag then library.Flags[Info.Flag]=tb.Text end
                     end)
                 end)
+                local api={GetText=function() return tb.Text end, SetText=function(_,t) tb.Text=tostring(t) end}
+                RegFlag(Info.Flag,function() return tb.Text end,function(v) tb.Text=tostring(v); if Info.Flag then library.Flags[Info.Flag]=v end; pcall(Info.Callback,v) end,"string","")
+                return api
             end
 
             -- ── TOGGLE ────────────────────────────────────────────
             function sectiontable:Toggle(Info)
-                Info.Text     = Info.Text     or "Toggle"
-                Info.Flag     = Info.Flag     or nil
-                Info.Default  = Info.Default  or false
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
-                if Info.Flag then library.Flags[Info.Flag]=false end
-                local insidetoggle = {}
-                local Toggled = false
-                local row=Instance.new("Frame"); row.Name="Toggle"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Text=Info.Text or "Toggle"; Info.Flag=Info.Flag or nil; Info.Default=Info.Default or false; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""
+                if Info.Flag then library.Flags[Info.Flag]=Info.Default end
+                local insidetoggle={}; local Toggled=Info.Default
+                local row=Instance.new("Frame"); row.Name="Toggle"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text
-                lbl.TextColor3=Color3.fromRGB(217,217,217); lbl.TextSize=11
-                lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1
-                lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
-                local btn=Instance.new("TextButton"); btn.Text=""; btn.BackgroundTransparency=1
-                btn.Size=UDim2.new(0,ELEM_W+8,0,27); btn.Parent=row
-                local togFrame=Instance.new("Frame"); togFrame.Name="ToggleFrame"
-                togFrame.BackgroundColor3=Color3.fromRGB(68,68,68); togFrame.BorderSizePixel=0
-                togFrame.Position=UDim2.new(0,ELEM_W+8-46,0.222,0); togFrame.Size=UDim2.new(0,30,0,15); togFrame.Parent=row
+                local lbl=Instance.new("TextLabel"); lbl.Font=Enum.Font.GothamBold; lbl.Text=Info.Text; lbl.TextColor3=Color3.fromRGB(195,195,195); lbl.TextSize=11; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0.04,0,0,0); lbl.Size=UDim2.new(0,ELEM_W,0,27); lbl.Parent=row
+                local btn=Instance.new("TextButton"); btn.Text=""; btn.BackgroundTransparency=1; btn.Size=UDim2.new(0,ELEM_W+8,0,27); btn.Parent=row
+                local togFrame=Instance.new("Frame"); togFrame.BackgroundColor3=Toggled and AC or GREY; togFrame.BorderSizePixel=0; togFrame.Position=UDim2.new(0,ELEM_W+8-46,.222,0); togFrame.Size=UDim2.new(0,30,0,15); togFrame.Parent=row
                 do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=togFrame end
                 ColorElements[togFrame]={Type="Toggle",Enabled=false}
-                local circle=Instance.new("ImageLabel"); circle.Name="CheckIcon"
-                circle.Image=getcustomasset("Shaman/Circle.png"); circle.ImageColor3=Color3.fromRGB(217,217,217)
-                circle.BackgroundTransparency=1; circle.Position=UDim2.new(0,1,0.067,0)
-                circle.Size=UDim2.new(0,13,0,13); circle.Parent=togFrame
+                local circle=Instance.new("ImageLabel"); circle.Image=getcustomasset("Shaman/Circle.png"); circle.ImageColor3=Color3.fromRGB(230,230,230); circle.BackgroundTransparency=1; circle.Position=Toggled and UDim2.new(0,16,.067,0) or UDim2.new(0,1,.067,0); circle.Size=UDim2.new(0,13,0,13); circle.Parent=togFrame
                 function insidetoggle:Set(bool)
-                    Toggled=bool
-                    if Info.Flag then library.Flags[Info.Flag]=Toggled end
-                    ColorElements[togFrame].Enabled=Toggled
-                    TweenService:Create(circle,TweenInfo.new(.15),{Position=Toggled and UDim2.new(0,16,0.067,0) or UDim2.new(0,1,0.067,0)}):Play()
-                    if not Toggled then
-                        TweenService:Create(togFrame,TweenInfo.new(.15),{BackgroundColor3=Color3.fromRGB(68,68,68)}):Play()
-                    elseif not EditOpened then
-                        TweenService:Create(togFrame,TweenInfo.new(.15),{BackgroundColor3=Color3.fromRGB(48,207,106)}):Play()
-                    end
+                    Toggled=bool; if Info.Flag then library.Flags[Info.Flag]=Toggled end; ColorElements[togFrame].Enabled=Toggled
+                    TweenService:Create(circle,TweenInfo.new(.15),{Position=Toggled and UDim2.new(0,16,.067,0) or UDim2.new(0,1,.067,0)}):Play()
+                    if not Toggled then TweenService:Create(togFrame,TweenInfo.new(.15),{BackgroundColor3=GREY}):Play()
+                    elseif not EditOpened then TweenService:Create(togFrame,TweenInfo.new(.15),{BackgroundColor3=AC}):Play() end
                     pcall(Info.Callback,Toggled)
                 end
                 if Info.Default then task.spawn(function() insidetoggle:Set(true) end) end
                 btn.MouseButton1Click:Connect(function() Toggled=not Toggled; insidetoggle:Set(Toggled) end)
+                RegFlag(Info.Flag,function() return Toggled end,function(v) insidetoggle:Set(v) end,"boolean",Info.Default)
                 return insidetoggle
             end
 
-            -- ── SLIDER ────────────────────────────────────────────
+            -- ── SLIDER  (with thumb dot) ──────────────────────────
             function sectiontable:Slider(Info)
-                Info.Text     = Info.Text     or "Slider"
-                Info.Default  = Info.Default  or 50
-                Info.Minimum  = Info.Minimum  or 1
-                Info.Maximum  = Info.Maximum  or 100
-                Info.Flag     = Info.Flag     or nil
-                Info.Postfix  = Info.Postfix  or ""
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
+                Info=Info or {}; Info.Text=Info.Text or "Slider"; Info.Default=Info.Default or 50; Info.Minimum=Info.Minimum or 0; Info.Maximum=Info.Maximum or 100; Info.Flag=Info.Flag or nil; Info.Postfix=Info.Postfix or ""; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""
                 if Info.Minimum>Info.Maximum then Info.Minimum,Info.Maximum=Info.Maximum,Info.Minimum end
-                Info.Default = math.clamp(Info.Default,Info.Minimum,Info.Maximum)
+                Info.Default=math.clamp(Info.Default,Info.Minimum,Info.Maximum)
                 local DefaultScale=(Info.Default-Info.Minimum)/(Info.Maximum-Info.Minimum)
-                -- slider track is ELEM_W - 8 px wide to match proportions
-                local TRACK_W = ELEM_W - 8
-                local row=Instance.new("Frame"); row.Name="Slider"; row.BackgroundTransparency=1
-                row.Size=UDim2.new(0,ELEM_W+8,0,40); row.Parent=sectionFrame
+                local TRACK_W=ELEM_W-8; local curVal=Info.Default
+                if Info.Flag then library.Flags[Info.Flag]=curVal end
+
+                local row=Instance.new("Frame"); row.Name="Slider"; row.BackgroundTransparency=1; row.Size=UDim2.new(0,ELEM_W+8,0,40); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local slLbl=Instance.new("TextLabel"); slLbl.Font=Enum.Font.GothamBold; slLbl.Text=Info.Text
-                slLbl.TextColor3=Color3.fromRGB(217,217,217); slLbl.TextSize=11
-                slLbl.TextXAlignment=Enum.TextXAlignment.Left; slLbl.BackgroundTransparency=1
-                slLbl.Position=UDim2.new(0.04,0,0,0); slLbl.Size=UDim2.new(0,TRACK_W,0,27); slLbl.Parent=row
-                local outer=Instance.new("Frame"); outer.Name="OuterSlider"
-                outer.BackgroundColor3=Color3.fromRGB(68,68,68); outer.BorderSizePixel=0
-                outer.Position=UDim2.new(0.04,-1,0.664,0); outer.Size=UDim2.new(0,TRACK_W,0,4); outer.Parent=row
+
+                local nameL=Instance.new("TextLabel"); nameL.Font=Enum.Font.GothamBold; nameL.Text=Info.Text; nameL.TextColor3=Color3.fromRGB(195,195,195); nameL.TextSize=11; nameL.TextXAlignment=Enum.TextXAlignment.Left; nameL.BackgroundTransparency=1; nameL.Position=UDim2.new(0.04,0,0,0); nameL.Size=UDim2.new(0,TRACK_W,0,24); nameL.Parent=row
+                local valL=Instance.new("TextLabel"); valL.Font=Enum.Font.GothamBold; valL.Text=tostring(Info.Default)..Info.Postfix; valL.TextColor3=Color3.fromRGB(130,130,130); valL.TextSize=11; valL.TextXAlignment=Enum.TextXAlignment.Right; valL.BackgroundTransparency=1; valL.Position=UDim2.new(0.04,0,0,0); valL.Size=UDim2.new(0,TRACK_W,0,24); valL.Parent=row
+
+                -- track
+                local outer=Instance.new("Frame"); outer.Name="OuterSlider"; outer.BackgroundColor3=Color3.fromRGB(42,42,42); outer.BorderSizePixel=0; outer.Position=UDim2.new(0.04,-1,0,27); outer.Size=UDim2.new(0,TRACK_W,0,4); outer.Parent=row
                 do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=outer end
-                local inner=Instance.new("Frame"); inner.Name="InnerSlider"
-                inner.BackgroundColor3=Color3.fromRGB(48,207,106); inner.BorderSizePixel=0
-                inner.Size=UDim2.new(DefaultScale,0,0,4); inner.ZIndex=2; inner.Parent=outer
+
+                -- fill
+                local inner=Instance.new("Frame"); inner.Name="InnerSlider"; inner.BackgroundColor3=AC; inner.BorderSizePixel=0; inner.Size=UDim2.new(DefaultScale,0,0,4); inner.ZIndex=2; inner.Parent=outer
                 do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=inner end
                 ColorElements[inner]={Type="Slider",Enabled=false}
-                local valLbl=Instance.new("TextLabel"); valLbl.Font=Enum.Font.GothamBold
-                valLbl.Text=tostring(Info.Default)..Info.Postfix
-                valLbl.TextColor3=Color3.fromRGB(217,217,217); valLbl.TextSize=11
-                valLbl.TextXAlignment=Enum.TextXAlignment.Right; valLbl.BackgroundTransparency=1
-                valLbl.Position=UDim2.new(0.04,0,0,0); valLbl.Size=UDim2.new(0,TRACK_W,0,27); valLbl.Parent=row
+
+                -- ✦ thumb dot  (NEW) ─────────────────────────────
+                local thumb=Instance.new("Frame"); thumb.Name="Thumb"
+                thumb.BackgroundColor3=Color3.fromRGB(235,235,235)
+                thumb.AnchorPoint=Vector2.new(.5,.5); thumb.BorderSizePixel=0; thumb.ZIndex=3
+                thumb.Position=UDim2.new(DefaultScale,0,.5,0); thumb.Size=UDim2.new(0,10,0,10)
+                thumb.Parent=outer
+                do local c=Instance.new("UICorner"); c.CornerRadius=UDim.new(0,100); c.Parent=thumb end
+                do local s=Instance.new("UIStroke"); s.Color=ACD; s.Thickness=1.5; s.Parent=thumb end
+
+                -- expanded hit area so small track is easy to grab
                 local slBtn=Instance.new("TextButton"); slBtn.Text=""; slBtn.BackgroundTransparency=1
-                slBtn.Position=UDim2.new(0.04,0,0.664,0); slBtn.Size=UDim2.new(0,TRACK_W,0,4); slBtn.Parent=row
-                task.spawn(function()
-                    pcall(Info.Callback,Info.Default)
-                    if Info.Flag then library.Flags[Info.Flag]=Info.Default end
-                end)
+                slBtn.Position=UDim2.new(0,0,-2,0); slBtn.Size=UDim2.new(1,0,0,24); slBtn.ZIndex=5; slBtn.Parent=outer
+
+                local function SetSlider(px)
+                    px=math.clamp(px,0,1)
+                    curVal=math.floor(Info.Minimum+((Info.Maximum-Info.Minimum)*px))
+                    valL.Text=tostring(curVal)..Info.Postfix
+                    if Info.Flag then library.Flags[Info.Flag]=curVal end
+                    TweenService:Create(inner,TweenInfo.new(.05),{Size=UDim2.new(px,0,0,4)}):Play()
+                    TweenService:Create(thumb,TweenInfo.new(.05),{Position=UDim2.new(px,0,.5,0)}):Play()
+                    task.spawn(function() pcall(Info.Callback,curVal) end)
+                end
+
+                task.spawn(function() pcall(Info.Callback,Info.Default) end)
+
                 slBtn.MouseButton1Down:Connect(function()
+                    TweenService:Create(thumb,TweenInfo.new(.1),{Size=UDim2.new(0,13,0,13)}):Play()
                     local mm,mk
-                    mm=Mouse.Move:Connect(function()
-                        local Px=library:GetXY(outer)
-                        local Val=math.floor(Info.Minimum+((Info.Maximum-Info.Minimum)*Px))
-                        TweenService:Create(inner,TweenInfo.new(.1),{Size=UDim2.new(Px,0,0,4)}):Play()
-                        valLbl.Text=tostring(Val)..Info.Postfix
-                        if Info.Flag then library.Flags[Info.Flag]=Val end
-                        task.spawn(function() pcall(Info.Callback,Val) end)
-                    end)
+                    mm=Mouse.Move:Connect(function() SetSlider(library:GetXY(outer)) end)
                     mk=UserInputService.InputEnded:Connect(function(ui)
-                        if ui.UserInputType==Enum.UserInputType.MouseButton1 then mm:Disconnect(); mk:Disconnect() end
+                        if ui.UserInputType==Enum.UserInputType.MouseButton1 then
+                            mm:Disconnect(); mk:Disconnect()
+                            TweenService:Create(thumb,TweenInfo.new(.12,Enum.EasingStyle.Back),{Size=UDim2.new(0,10,0,10)}):Play()
+                        end
                     end)
                 end)
+
+                local api={GetValue=function() return curVal end, SetValue=function(_,v) SetSlider(math.clamp((v-Info.Minimum)/(Info.Maximum-Info.Minimum),0,1)) end}
+                RegFlag(Info.Flag,function() return curVal end,function(v) api:SetValue(nil,v) end,"number",Info.Default)
+                return api
             end
 
             -- ── DROPDOWN ──────────────────────────────────────────
             function sectiontable:Dropdown(Info)
-                Info.Text     = Info.Text     or "Dropdown"
-                Info.List     = Info.List     or {}
-                Info.Flag     = Info.Flag     or nil
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
-                Info.Default  = Info.Default  or nil
-                local DropdownYSize = 27
-                if Info.Default then
-                    task.spawn(function() pcall(Info.Callback,Info.Default) end)
-                    if Info.Flag then library.Flags[Info.Flag]=Info.Default end
-                end
-                local insidedropdown = {}
-                local row=Instance.new("Frame"); row.Name="Dropdown"; row.BackgroundTransparency=1
-                row.ClipsDescendants=true; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
+                Info=Info or {}; Info.Text=Info.Text or "Dropdown"; Info.List=Info.List or {}; Info.Flag=Info.Flag or nil; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""; Info.Default=Info.Default or nil
+                local DropdownYSize=27
+                if Info.Default then task.spawn(function() pcall(Info.Callback,Info.Default) end); if Info.Flag then library.Flags[Info.Flag]=Info.Default end end
+                local insidedropdown={}
+                local row=Instance.new("Frame"); row.Name="Dropdown"; row.BackgroundTransparency=1; row.ClipsDescendants=true; row.Size=UDim2.new(0,ELEM_W+8,0,27); row.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(row,Info.Tooltip) end
-                local ddLbl=Instance.new("TextLabel"); ddLbl.Font=Enum.Font.GothamBold; ddLbl.Text=Info.Text
-                ddLbl.TextColor3=Color3.fromRGB(217,217,217); ddLbl.TextSize=11
-                ddLbl.TextXAlignment=Enum.TextXAlignment.Left; ddLbl.BackgroundTransparency=1
-                ddLbl.Position=UDim2.new(0.04,0,0,0); ddLbl.Size=UDim2.new(0,ELEM_W,0,27); ddLbl.Parent=row
-                local ddIcon=Instance.new("ImageLabel"); ddIcon.Name="DropdownIcon"
-                ddIcon.Image=getcustomasset("Shaman/CollapseArrow.png")
-                ddIcon.ImageColor3=Color3.fromRGB(191,191,191); ddIcon.AnchorPoint=Vector2.new(1,0)
-                ddIcon.BackgroundTransparency=1; ddIcon.Rotation=-90
-                ddIcon.Position=UDim2.new(0,ELEM_W+5,0,7); ddIcon.Size=UDim2.new(0,13,0,13); ddIcon.ZIndex=2; ddIcon.Parent=row
-                local ddBtn=Instance.new("TextButton"); ddBtn.Text=""; ddBtn.BackgroundTransparency=1
-                ddBtn.Size=UDim2.new(0,ELEM_W+8,0,27); ddBtn.Parent=row
-                local container=Instance.new("Frame"); container.Name="DropdownContainer"
-                container.BackgroundTransparency=1; container.BorderSizePixel=0
-                container.Size=UDim2.new(0,ELEM_W+8,0,27); container.Visible=true; container.Parent=row
+                local ddLbl=Instance.new("TextLabel"); ddLbl.Font=Enum.Font.GothamBold; ddLbl.Text=Info.Text; ddLbl.TextColor3=Color3.fromRGB(195,195,195); ddLbl.TextSize=11; ddLbl.TextXAlignment=Enum.TextXAlignment.Left; ddLbl.BackgroundTransparency=1; ddLbl.Position=UDim2.new(0.04,0,0,0); ddLbl.Size=UDim2.new(0,ELEM_W,0,27); ddLbl.Parent=row
+                local ddIcon=Instance.new("ImageLabel"); ddIcon.Image=getcustomasset("Shaman/CollapseArrow.png"); ddIcon.ImageColor3=Color3.fromRGB(135,135,135); ddIcon.AnchorPoint=Vector2.new(1,0); ddIcon.BackgroundTransparency=1; ddIcon.Rotation=-90; ddIcon.Position=UDim2.new(0,ELEM_W+5,0,7); ddIcon.Size=UDim2.new(0,13,0,13); ddIcon.ZIndex=2; ddIcon.Parent=row
+                local ddBtn=Instance.new("TextButton"); ddBtn.Text=""; ddBtn.BackgroundTransparency=1; ddBtn.Size=UDim2.new(0,ELEM_W+8,0,27); ddBtn.Parent=row
+                local container=Instance.new("Frame"); container.BackgroundTransparency=1; container.BorderSizePixel=0; container.Size=UDim2.new(0,ELEM_W+8,0,27); container.Visible=true; container.Parent=row
                 do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=container end
                 do local p=Instance.new("UIPadding"); p.PaddingTop=UDim.new(0,27); p.Parent=container end
                 local DropdownOpened=false
-                local function TweenDD(opening)
-                    TweenService:Create(ddIcon,TweenInfo.new(.15),{Rotation=opening and -180 or -90}):Play()
-                    TweenService:Create(ddIcon,TweenInfo.new(.15),{ImageColor3=opening and Color3.fromRGB(255,255,255) or Color3.fromRGB(191,191,191)}):Play()
-                    TweenService:Create(row,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,opening and DropdownYSize or 27)}):Play()
-                    TweenService:Create(container,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,opening and DropdownYSize or 27)}):Play()
-                    TweenService:Create(container,TweenInfo.new(.15),{BackgroundTransparency=opening and .96 or 1}):Play()
-                    TweenService:Create(sectionFrame,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(opening and DropdownYSize-27 or -(DropdownYSize-27)))}):Play()
-                    TweenService:Create(section,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(opening and DropdownYSize-23 or -(DropdownYSize-27)))}):Play()
+                local function TweenDD(open)
+                    TweenService:Create(ddIcon,TweenInfo.new(.15),{Rotation=open and -180 or -90, ImageColor3=open and Color3.fromRGB(225,225,225) or Color3.fromRGB(135,135,135)}):Play()
+                    TweenService:Create(row,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,open and DropdownYSize or 27)}):Play()
+                    TweenService:Create(container,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,open and DropdownYSize or 27), BackgroundTransparency=open and .93 or 1}):Play()
+                    local dy=DropdownYSize-27
+                    TweenService:Create(sectionFrame,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(open and dy or -dy))}):Play()
+                    TweenService:Create(section,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,section.Size.Y.Offset+(open and dy or -dy))}):Play()
                 end
                 function insidedropdown:Add(text)
                     DropdownYSize=DropdownYSize+27
                     local irow=Instance.new("Frame"); irow.BackgroundTransparency=1; irow.Size=UDim2.new(0,ELEM_W+8,0,27); irow.Parent=container
-                    local itxt=Instance.new("TextLabel"); itxt.Font=Enum.Font.GothamBold; itxt.Text=text
-                    itxt.TextColor3=Color3.fromRGB(191,191,191); itxt.TextSize=11
-                    itxt.TextXAlignment=Enum.TextXAlignment.Left; itxt.BackgroundTransparency=1
-                    itxt.Position=UDim2.new(0.04,0,0,0); itxt.Size=UDim2.new(0,ELEM_W,0,28); itxt.Parent=irow
-                    local ibtn=Instance.new("TextButton"); ibtn.Text=""; ibtn.BackgroundTransparency=1
-                    ibtn.Size=UDim2.new(0,ELEM_W+8,0,27); ibtn.Parent=irow
-                    ibtn.MouseEnter:Connect(function() TweenService:Create(itxt,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(255,255,255)}):Play() end)
-                    ibtn.MouseLeave:Connect(function() TweenService:Create(itxt,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(191,191,191)}):Play() end)
+                    local itxt=Instance.new("TextLabel"); itxt.Font=Enum.Font.GothamBold; itxt.Text=text; itxt.TextColor3=Color3.fromRGB(150,150,150); itxt.TextSize=11; itxt.TextXAlignment=Enum.TextXAlignment.Left; itxt.BackgroundTransparency=1; itxt.Position=UDim2.new(0.04,0,0,0); itxt.Size=UDim2.new(0,ELEM_W,0,27); itxt.Parent=irow
+                    local ibtn=Instance.new("TextButton"); ibtn.Text=""; ibtn.BackgroundTransparency=1; ibtn.Size=UDim2.new(0,ELEM_W+8,0,27); ibtn.Parent=irow
+                    ibtn.MouseEnter:Connect(function() TweenService:Create(itxt,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(228,228,228)}):Play() end)
+                    ibtn.MouseLeave:Connect(function() TweenService:Create(itxt,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(150,150,150)}):Play() end)
                     ibtn.MouseButton1Click:Connect(function()
-                        DropdownOpened=false
+                        DropdownOpened=false; ddLbl.Text=itxt.Text
                         task.spawn(function() pcall(Info.Callback,itxt.Text) end)
                         if Info.Flag then library.Flags[Info.Flag]=itxt.Text end
-                        ddLbl.Text=itxt.Text; TweenDD(false)
+                        TweenDD(false)
                     end)
                 end
                 function insidedropdown:Refresh(RI)
-                    RI.Text=RI.Text or ddLbl.Text; RI.List=RI.List or Info.List
-                    for _,v in pairs(container:GetChildren()) do
-                        if v.ClassName=="Frame" then DropdownYSize=DropdownYSize-27; if DropdownOpened then sectionFrame.Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset-27); section.Size=UDim2.new(0,ELEM_W+8,0,section.Size.Y.Offset-27) end; v:Destroy() end
-                    end
-                    DropdownOpened=false
-                    for _,v in pairs(RI.List) do insidedropdown:Add(v) end
-                    TweenDD(false)
+                    RI=RI or {}; RI.List=RI.List or Info.List
+                    for _,v in pairs(container:GetChildren()) do if v.ClassName=="Frame" then DropdownYSize=DropdownYSize-27; if DropdownOpened then sectionFrame.Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset-27); section.Size=UDim2.new(0,ELEM_W+8,0,section.Size.Y.Offset-27) end; v:Destroy() end end
+                    DropdownOpened=false; for _,v in pairs(RI.List) do insidedropdown:Add(v) end; TweenDD(false)
                 end
                 for _,v in pairs(Info.List) do insidedropdown:Add(v) end
                 Closed:GetPropertyChangedSignal("Value"):Connect(function() if not Closed.Value then DropdownOpened=false; TweenDD(false) end end)
@@ -763,87 +855,60 @@ function library:Window(Info)
 
             -- ── RADIO BUTTON ──────────────────────────────────────
             function sectiontable:RadioButton(Info)
-                Info.Text     = Info.Text     or "Radio Button"
-                Info.Options  = Info.Options  or {}
-                Info.Flag     = Info.Flag     or nil
-                Info.Callback = Info.Callback or function() end
-                Info.Tooltip  = Info.Tooltip  or ""
-                Info.Default  = Info.Default  or nil
+                Info=Info or {}; Info.Text=Info.Text or "Radio"; Info.Options=Info.Options or {}; Info.Flag=Info.Flag or nil; Info.Callback=Info.Callback or function()end; Info.Tooltip=Info.Tooltip or ""; Info.Default=Info.Default or nil
                 local RadioOpened=false; local RadioYSize=27
-                if Info.Default then
-                    task.spawn(function() pcall(Info.Callback,Info.Default) end)
-                    if Info.Flag then library.Flags[Info.Flag]=Info.Default end
-                end
+                if Info.Default then task.spawn(function() pcall(Info.Callback,Info.Default) end); if Info.Flag then library.Flags[Info.Flag]=Info.Default end end
                 local insideradio={}
-                local radioBg=Instance.new("Frame"); radioBg.Name="RadioButton"; radioBg.BackgroundTransparency=1
-                radioBg.Size=UDim2.new(0,ELEM_W+8,0,27); radioBg.Parent=sectionFrame
+                local radioBg=Instance.new("Frame"); radioBg.BackgroundTransparency=1; radioBg.Size=UDim2.new(0,ELEM_W+8,0,27); radioBg.Parent=sectionFrame
                 if Info.Tooltip~="" then AddTooltip(radioBg,Info.Tooltip) end
-                local headBtn=Instance.new("Frame"); headBtn.BackgroundTransparency=1; headBtn.Size=UDim2.new(0,ELEM_W+8,0,27); headBtn.Parent=radioBg
-                local headTextBtn=Instance.new("TextButton"); headTextBtn.Text=""; headTextBtn.BackgroundTransparency=1; headTextBtn.Size=UDim2.new(0,ELEM_W+8,0,27); headTextBtn.Parent=headBtn
-                local headLbl=Instance.new("TextLabel"); headLbl.Font=Enum.Font.GothamBold; headLbl.Text=Info.Text
-                headLbl.TextColor3=Color3.fromRGB(217,217,217); headLbl.TextSize=11; headLbl.TextXAlignment=Enum.TextXAlignment.Left
-                headLbl.BackgroundTransparency=1; headLbl.Position=UDim2.new(0.04,0,0,0); headLbl.Size=UDim2.new(0,ELEM_W,0,27); headLbl.Parent=headBtn
-                local arrowIcon=Instance.new("ImageLabel"); arrowIcon.Image=getcustomasset("Shaman/CollapseArrow.png")
-                arrowIcon.ImageColor3=Color3.fromRGB(191,191,191); arrowIcon.AnchorPoint=Vector2.new(1,0)
-                arrowIcon.BackgroundTransparency=1; arrowIcon.Rotation=-90; arrowIcon.Position=UDim2.new(0,ELEM_W+5,0,7)
-                arrowIcon.Size=UDim2.new(0,13,0,13); arrowIcon.Parent=headBtn
-                local radioIcon2=Instance.new("ImageLabel"); radioIcon2.Image=getcustomasset("Shaman/RadioButton.png")
-                radioIcon2.ImageColor3=Color3.fromRGB(191,191,191); radioIcon2.AnchorPoint=Vector2.new(1,0)
-                radioIcon2.BackgroundTransparency=1; radioIcon2.Position=UDim2.new(0,ELEM_W-15,0,7)
-                radioIcon2.Size=UDim2.new(0,13,0,13); radioIcon2.Parent=headBtn
-                local rContainer=Instance.new("Frame"); rContainer.Name="RadioContainer"
-                rContainer.BackgroundTransparency=1; rContainer.ClipsDescendants=true
-                rContainer.Size=UDim2.new(0,ELEM_W+8,0,27); rContainer.Parent=radioBg
+                local headFrame=Instance.new("Frame"); headFrame.BackgroundTransparency=1; headFrame.Size=UDim2.new(0,ELEM_W+8,0,27); headFrame.Parent=radioBg
+                local headBtn=Instance.new("TextButton"); headBtn.Text=""; headBtn.BackgroundTransparency=1; headBtn.Size=UDim2.new(0,ELEM_W+8,0,27); headBtn.Parent=headFrame
+                local headLbl=Instance.new("TextLabel"); headLbl.Font=Enum.Font.GothamBold; headLbl.Text=Info.Text; headLbl.TextColor3=Color3.fromRGB(195,195,195); headLbl.TextSize=11; headLbl.TextXAlignment=Enum.TextXAlignment.Left; headLbl.BackgroundTransparency=1; headLbl.Position=UDim2.new(0.04,0,0,0); headLbl.Size=UDim2.new(0,ELEM_W,0,27); headLbl.Parent=headFrame
+                local arrowIco=Instance.new("ImageLabel"); arrowIco.Image=getcustomasset("Shaman/CollapseArrow.png"); arrowIco.ImageColor3=Color3.fromRGB(135,135,135); arrowIco.AnchorPoint=Vector2.new(1,0); arrowIco.BackgroundTransparency=1; arrowIco.Rotation=-90; arrowIco.Position=UDim2.new(0,ELEM_W+5,0,7); arrowIco.Size=UDim2.new(0,13,0,13); arrowIco.Parent=headFrame
+                local rIcon2=Instance.new("ImageLabel"); rIcon2.Image=getcustomasset("Shaman/RadioButton.png"); rIcon2.ImageColor3=Color3.fromRGB(135,135,135); rIcon2.AnchorPoint=Vector2.new(1,0); rIcon2.BackgroundTransparency=1; rIcon2.Position=UDim2.new(0,ELEM_W-15,0,7); rIcon2.Size=UDim2.new(0,13,0,13); rIcon2.Parent=headFrame
+                local rContainer=Instance.new("Frame"); rContainer.BackgroundTransparency=1; rContainer.ClipsDescendants=true; rContainer.Size=UDim2.new(0,ELEM_W+8,0,27); rContainer.Parent=radioBg
                 do local l=Instance.new("UIListLayout"); l.SortOrder=Enum.SortOrder.LayoutOrder; l.Parent=rContainer end
                 do local p=Instance.new("UIPadding"); p.PaddingTop=UDim.new(0,27); p.Parent=rContainer end
                 local RadioSelected=nil
-                local function TweenRadio(opening)
-                    TweenService:Create(arrowIcon,TweenInfo.new(.15),{ImageColor3=opening and Color3.fromRGB(255,255,255) or Color3.fromRGB(191,191,191)}):Play()
-                    TweenService:Create(arrowIcon,TweenInfo.new(.15),{Rotation=opening and -180 or -90}):Play()
-                    TweenService:Create(radioIcon2,TweenInfo.new(.15),{ImageColor3=opening and Color3.fromRGB(255,255,255) or Color3.fromRGB(191,191,191)}):Play()
-                    TweenService:Create(radioBg,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,opening and RadioYSize or 27)}):Play()
-                    TweenService:Create(rContainer,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,opening and RadioYSize or 27)}):Play()
-                    TweenService:Create(rContainer,TweenInfo.new(.15),{BackgroundTransparency=opening and .96 or 1}):Play()
-                    TweenService:Create(sectionFrame,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(opening and RadioYSize-27 or -(RadioYSize-27)))}):Play()
-                    TweenService:Create(section,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(opening and RadioYSize-23 or -(RadioYSize-27)))}):Play()
+                local function TweenRadio(open)
+                    TweenService:Create(arrowIco,TweenInfo.new(.15),{ImageColor3=open and Color3.fromRGB(228,228,228) or Color3.fromRGB(135,135,135), Rotation=open and -180 or -90}):Play()
+                    TweenService:Create(rIcon2,TweenInfo.new(.15),{ImageColor3=open and Color3.fromRGB(228,228,228) or Color3.fromRGB(135,135,135)}):Play()
+                    local ry=RadioYSize-27
+                    TweenService:Create(radioBg,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,open and RadioYSize or 27)}):Play()
+                    TweenService:Create(rContainer,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,open and RadioYSize or 27), BackgroundTransparency=open and .93 or 1}):Play()
+                    TweenService:Create(sectionFrame,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,sectionFrame.Size.Y.Offset+(open and ry or -ry))}):Play()
+                    TweenService:Create(section,TweenInfo.new(.15),{Size=UDim2.new(0,ELEM_W+8,0,section.Size.Y.Offset+(open and ry or -ry))}):Play()
                 end
                 function insideradio:Button(text)
                     RadioYSize=RadioYSize+27
-                    local rRow=Instance.new("Frame"); rRow.Name="Radio"; rRow.BackgroundTransparency=1
-                    rRow.Size=UDim2.new(0,ELEM_W+8,0,27); rRow.Parent=rContainer
+                    local rRow=Instance.new("Frame"); rRow.Name="Radio"; rRow.BackgroundTransparency=1; rRow.Size=UDim2.new(0,ELEM_W+8,0,27); rRow.Parent=rContainer
                     local rBtn=Instance.new("TextButton"); rBtn.Text=""; rBtn.BackgroundTransparency=1; rBtn.Size=UDim2.new(0,ELEM_W+8,0,27); rBtn.Parent=rRow
-                    local rOuter=Instance.new("ImageLabel"); rOuter.Name="RadioOuter"; rOuter.Image=getcustomasset("Shaman/RadioOuter.png")
-                    rOuter.ImageColor3=Color3.fromRGB(191,191,191); rOuter.BackgroundTransparency=1; rOuter.BorderSizePixel=0
-                    rOuter.Position=UDim2.new(0,ELEM_W+8-26,0.185,0); rOuter.Size=UDim2.new(0,17,0,17); rOuter.Parent=rRow
-                    local rInner=Instance.new("ImageLabel"); rInner.Name="RadioInner"; rInner.Image=getcustomasset("Shaman/RadioInner.png")
-                    rInner.AnchorPoint=Vector2.new(0.5,0.5); rInner.BackgroundTransparency=1; rInner.BorderSizePixel=0
-                    rInner.Position=UDim2.new(0.5,0,0.5,0); rInner.Size=UDim2.new(0,7,0,7); rInner.Parent=rOuter
+                    local rOuter=Instance.new("ImageLabel"); rOuter.Name="RadioOuter"; rOuter.Image=getcustomasset("Shaman/RadioOuter.png"); rOuter.ImageColor3=Color3.fromRGB(135,135,135); rOuter.BackgroundTransparency=1; rOuter.BorderSizePixel=0; rOuter.Position=UDim2.new(0,ELEM_W+8-26,.185,0); rOuter.Size=UDim2.new(0,17,0,17); rOuter.Parent=rRow
+                    local rInner=Instance.new("ImageLabel"); rInner.Name="RadioInner"; rInner.Image=getcustomasset("Shaman/RadioInner.png"); rInner.AnchorPoint=Vector2.new(.5,.5); rInner.BackgroundTransparency=1; rInner.BorderSizePixel=0; rInner.Position=UDim2.new(.5,0,.5,0); rInner.Size=UDim2.new(0,7,0,7); rInner.Parent=rOuter
                     ColorElements[rInner]={Type="Toggle",Enabled=false}; ColorElements[rOuter]={Type="Toggle",Enabled=false}
-                    local rText=Instance.new("TextLabel"); rText.Name="RadioText"; rText.Font=Enum.Font.GothamBold; rText.Text=text
-                    rText.TextColor3=Color3.fromRGB(191,191,191); rText.TextSize=11; rText.TextXAlignment=Enum.TextXAlignment.Left
-                    rText.BackgroundTransparency=1; rText.Position=UDim2.new(0.04,0,0,0); rText.Size=UDim2.new(0,ELEM_W,0,27); rText.Parent=rRow
-                    rRow.MouseEnter:Connect(function() if RadioOpened and RadioSelected~=rRow then TweenService:Create(rText,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(217,217,217)}):Play(); TweenService:Create(rInner,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(217,217,217)}):Play(); TweenService:Create(rOuter,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(217,217,217)}):Play() end end)
-                    rRow.MouseLeave:Connect(function() if RadioOpened and RadioSelected~=rRow then TweenService:Create(rText,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(191,191,191)}):Play(); TweenService:Create(rInner,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(191,191,191)}):Play(); TweenService:Create(rOuter,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(191,191,191)}):Play() end end)
+                    local rText=Instance.new("TextLabel"); rText.Name="RadioText"; rText.Font=Enum.Font.GothamBold; rText.Text=text; rText.TextColor3=Color3.fromRGB(150,150,150); rText.TextSize=11; rText.TextXAlignment=Enum.TextXAlignment.Left; rText.BackgroundTransparency=1; rText.Position=UDim2.new(0.04,0,0,0); rText.Size=UDim2.new(0,ELEM_W,0,27); rText.Parent=rRow
+                    rRow.MouseEnter:Connect(function() if RadioOpened and RadioSelected~=rRow then TweenService:Create(rText,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(200,200,200)}):Play() end end)
+                    rRow.MouseLeave:Connect(function() if RadioOpened and RadioSelected~=rRow then TweenService:Create(rText,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(150,150,150)}):Play() end end)
                     rBtn.MouseButton1Click:Connect(function()
                         task.spawn(function() pcall(Info.Callback,rText.Text) end)
                         if Info.Flag then library.Flags[Info.Flag]=rText.Text end
                         ColorElements[rInner].Enabled=true; ColorElements[rOuter].Enabled=true; RadioSelected=rRow
                         for _,v in pairs(rContainer:GetChildren()) do
                             if v.ClassName=="Frame" and v~=rRow then
-                                ColorElements[v.RadioOuter].Enabled=false; ColorElements[v.RadioOuter.RadioInner].Enabled=false
-                                TweenService:Create(v.RadioOuter,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(191,191,191)}):Play()
-                                TweenService:Create(v.RadioOuter.RadioInner,TweenInfo.new(.15),{ImageColor3=Color3.fromRGB(191,191,191)}):Play()
-                                TweenService:Create(v.RadioText,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(191,191,191)}):Play()
+                                pcall(function() ColorElements[v.RadioOuter].Enabled=false; ColorElements[v.RadioOuter.RadioInner].Enabled=false end)
+                                TweenService:Create(v.RadioOuter,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(135,135,135)}):Play()
+                                TweenService:Create(v.RadioOuter.RadioInner,TweenInfo.new(.1),{ImageColor3=Color3.fromRGB(135,135,135)}):Play()
+                                TweenService:Create(v.RadioText,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(150,150,150)}):Play()
                             end
                         end
-                        TweenService:Create(rText,TweenInfo.new(.15),{TextColor3=Color3.fromRGB(255,255,255)}):Play()
+                        TweenService:Create(rText,TweenInfo.new(.1),{TextColor3=Color3.fromRGB(230,230,230)}):Play()
                         if not EditOpened then
-                            TweenService:Create(rInner,TweenInfo.new(.15),{ImageColor3=RadioOpened and Color3.fromRGB(48,207,106) or Color3.fromRGB(191,191,191)}):Play()
-                            TweenService:Create(rOuter,TweenInfo.new(.15),{ImageColor3=RadioOpened and Color3.fromRGB(48,207,106) or Color3.fromRGB(191,191,191)}):Play()
+                            TweenService:Create(rInner,TweenInfo.new(.1),{ImageColor3=AC}):Play()
+                            TweenService:Create(rOuter,TweenInfo.new(.1),{ImageColor3=AC}):Play()
                         end
                     end)
                 end
-                headTextBtn.MouseButton1Click:Connect(function() RadioOpened=not RadioOpened; TweenRadio(RadioOpened) end)
+                headBtn.MouseButton1Click:Connect(function() RadioOpened=not RadioOpened; TweenRadio(RadioOpened) end)
                 for _,v in pairs(Info.Options) do insideradio:Button(v) end
                 Closed:GetPropertyChangedSignal("Value"):Connect(function() if not Closed.Value then RadioOpened=false; TweenRadio(false) end end)
                 return insideradio
@@ -855,10 +920,137 @@ function library:Window(Info)
         return tab
     end -- /Tab
 
-    -- ── layout finalise ───────────────────────────────────────────
-    do
-        local uIStroke2 = Instance.new("UIStroke"); uIStroke2.Color=Color3.fromRGB(61,61,61); uIStroke2.Parent=main
-    end
+    -- ══════════════════════════════════════════════════════════════
+    --  BUILT-IN SETTINGS TAB   window:SettingsTab()
+    --  Creates a "Settings" tab at the bottom of the sidebar with a
+    --  full preset config system (save / load / delete / clipboard).
+    -- ══════════════════════════════════════════════════════════════
+    function window:SettingsTab(Opts)
+        Opts      = Opts      or {}
+        Opts.Icon = Opts.Icon or nil   -- optional rbxassetid
+
+        local st = window:Tab({ Text="Settings", Icon=Opts.Icon })
+
+        -- serialise all registered flags → JSON string
+        local function Serialize()
+            local data = {}
+            for flag, entry in pairs(winFlags) do
+                local v = entry.get()
+                if entry.type=="boolean" or entry.type=="number" or entry.type=="string" then
+                    data[flag] = v
+                elseif entry.type=="keycode" then
+                    local name="NONE"
+                    if v then pcall(function() name=tostring(v):match("%.(%w+)$") or "NONE" end) end
+                    data[flag]={__type="keycode", name=name}
+                end
+            end
+            return HttpService:JSONEncode(data)
+        end
+
+        -- apply decoded JSON table back to all setters
+        local function ApplyData(data)
+            for flag, val in pairs(data) do
+                local entry = winFlags[flag]
+                if entry then
+                    if type(val)=="table" and val.__type=="keycode" then
+                        local kc=nil
+                        if val.name and val.name~="NONE" then
+                            pcall(function() kc=Enum.KeyCode[val.name] end)
+                        end
+                        pcall(entry.set, kc)
+                    else
+                        pcall(entry.set, val)
+                    end
+                end
+            end
+        end
+
+        -- helper: sanitise preset name
+        local function GetName()
+            local n=(library.Flags["_sb_cfg_name"] or ""):gsub("[^%w_%-]","_")
+            return (n~="" and n) or "default"
+        end
+
+        -- ── sections ──────────────────────────────────────────────
+        local leftSec  = st:Section({ Text="Presets",  Side="Left",  Open=true })
+        local rightSec = st:Section({ Text="Info",     Side="Right", Open=true })
+
+        -- status label (top of left section)
+        local statusLbl = leftSec:Label({ Text="Ready.", Color=Color3.fromRGB(130,130,130) })
+
+        -- preset name input
+        local nameInput = leftSec:Input({ Placeholder="Preset name…", Flag="_sb_cfg_name" })
+        winFlags["_sb_cfg_name"] = nil  -- don't serialise internal flag
+
+        -- saved presets dropdown
+        local function GetDDList() local l=listConfigs(); return #l>0 and l or {"(none saved)"} end
+        local presetsDD = leftSec:Dropdown({
+            Text="Saved Presets", List=GetDDList(),
+            Callback=function(v) if v~="(none saved)" then nameInput:SetText(v) end end
+        })
+        local function RefreshDD() presetsDD:Refresh({List=GetDDList()}) end
+
+        -- action buttons
+        leftSec:Button({ Text="▶  Save Preset", Callback=function()
+            local name=GetName()
+            local ok,err=pcall(function() writefile(cfgPath(name), Serialize()) end)
+            statusLbl:Set(ok and {Text="✓  Saved: "..name, Color=AC}
+                            or  {Text="✕  Save failed",    Color=Color3.fromRGB(220,70,70)})
+            if ok then RefreshDD() end
+        end})
+
+        leftSec:Button({ Text="▶  Load Preset", Callback=function()
+            local name=GetName()
+            local ok,err=pcall(function() ApplyData(HttpService:JSONDecode(readfile(cfgPath(name)))) end)
+            statusLbl:Set(ok and {Text="✓  Loaded: "..name,    Color=AC}
+                            or  {Text="✕  Not found: "..name,  Color=Color3.fromRGB(220,70,70)})
+        end})
+
+        leftSec:Button({ Text="▶  Delete Preset", Callback=function()
+            local name=GetName()
+            local ok=pcall(function()
+                if delfile then delfile(cfgPath(name)) else error("delfile unavailable") end
+            end)
+            statusLbl:Set(ok and {Text="🗑  Deleted: "..name,       Color=Color3.fromRGB(200,155,55)}
+                            or  {Text="✕  Could not delete",        Color=Color3.fromRGB(220,70,70)})
+            if ok then RefreshDD() end
+        end})
+
+        leftSec:Button({ Text="▶  Export to Clipboard", Callback=function()
+            local ok=pcall(function() setclipboard(Serialize()) end)
+            statusLbl:Set(ok and {Text="✓  Copied to clipboard",    Color=AC}
+                            or  {Text="✕  Clipboard unavailable",   Color=Color3.fromRGB(220,70,70)})
+        end})
+
+        leftSec:Button({ Text="▶  Import from Clipboard", Callback=function()
+            local ok=pcall(function() ApplyData(HttpService:JSONDecode(getclipboard())) end)
+            statusLbl:Set(ok and {Text="✓  Imported from clipboard",Color=AC}
+                            or  {Text="✕  Invalid clipboard data",  Color=Color3.fromRGB(220,70,70)})
+        end})
+
+        leftSec:Button({ Text="▶  Reset All to Default", Callback=function()
+            for _,entry in pairs(winFlags) do pcall(entry.set, entry.default) end
+            statusLbl:Set({Text="⟳  Reset to defaults", Color=Color3.fromRGB(200,155,55)})
+        end})
+
+        -- ── info panel ────────────────────────────────────────────
+        local countLbl  = rightSec:Label({ Text="Registered flags: --",  Color=Color3.fromRGB(155,155,155) })
+        local fsLbl     = rightSec:Label({ Text="Filesystem: --",         Color=Color3.fromRGB(155,155,155) })
+        local folderLbl = rightSec:Label({ Text="Folder: "..CFG_FOLDER,   Color=Color3.fromRGB(110,110,110) })
+        rightSec:Label({ Text="Tip: name your preset before saving.", Color=Color3.fromRGB(90,90,90) })
+
+        task.defer(function()
+            local count=0; for _ in pairs(winFlags) do count=count+1 end
+            countLbl:Set({Text="Registered flags: "..count})
+            fsLbl:Set({Text="Filesystem: "..(listfiles and "available" or "unavailable")})
+            RefreshDD()
+        end)
+
+        return st
+    end -- /SettingsTab
+
+    -- final stroke on main
+    do local s=Instance.new("UIStroke"); s.Color=Color3.fromRGB(48,48,48); s.Parent=main end
 
     return window
 end -- /Window
